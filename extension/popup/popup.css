@@ -13,6 +13,16 @@ button.secondary { color: #0e665e; background: white; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 #status { min-height: 20px; margin: 12px 2px; color: #5d6b75; font-size: 13px; }
 #status.error { color: #a22929; }
+.page-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid #cddcdd; border-radius: 6px; background: white; }
+.page-context .label { display: block; margin-bottom: 3px; color: #718087; font-size: 10px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
+.page-context strong { font-size: 13px; }
+.page-context small { max-width: 190px; overflow: hidden; color: #607078; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.account { margin-top: 12px; padding: 12px; border: 1px solid #cddcdd; border-radius: 6px; background: white; }
+.account .section-title { margin-top: 0; }
+.input-label { display: block; margin: 10px 0 5px; color: #52616a; font-size: 11px; font-weight: 750; }
+#account-username { width: 100%; min-height: 40px; border: 1px solid #c7d1d5; border-radius: 5px; padding: 0 10px; font: inherit; }
+.account-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 9px; }
+.policy-note { margin-top: 9px; color: #76838a; font-size: 10px; line-height: 1.4; }
 .section-title { display: flex; align-items: baseline; justify-content: space-between; margin: 15px 0 8px; }
 h2 { font-size: 16px; }
 #count { color: #6c7880; font-size: 12px; }

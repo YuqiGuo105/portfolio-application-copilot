@@ -18,4 +18,19 @@ class ApplicationFieldResolverTest {
         assertThat(result.get(1).status()).isEqualTo(FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION);
         assertThat(result.get(1).value()).isNull();
     }
+
+    @Test void resolvesStoredContactDataButKeepsStoredVisaAnswersReviewable() {
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(), List.of(), Map.of("email address", "owner@example.com", "visa sponsorship", "No"),
+                new CandidateProfile.Source("mcp", List.of("admin.search_content"), "fresh"));
+        List<FieldResolution> result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-2", List.of(
+                        new ResolveFieldsRequest.Field("email", "Email", "email", List.of()),
+                        new ResolveFieldsRequest.Field("sponsor", "Visa sponsorship", "select", List.of("Yes", "No")))));
+
+        assertThat(result.get(0).status()).isEqualTo(FieldResolution.ResolutionStatus.RESOLVED);
+        assertThat(result.get(0).value()).isEqualTo("owner@example.com");
+        assertThat(result.get(1).status()).isEqualTo(FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION);
+        assertThat(result.get(1).value()).isEqualTo("No");
+    }
 }

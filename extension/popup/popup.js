@@ -5,7 +5,12 @@ const status = document.querySelector('#status');
 const results = document.querySelector('#results');
 const fieldsRoot = document.querySelector('#fields');
 const applyButton = document.querySelector('#apply');
+const accountRoot = document.querySelector('#account');
+const pageContext = document.querySelector('#page-context');
+const accountUsername = document.querySelector('#account-username');
 let resolutions = [];
+let currentPage = null;
+let activeCredential = null;
 
 document.querySelector('#connect').addEventListener('click', async () => {
   await run('Connected to the authenticated MCP cluster.', connectAdminSession);
@@ -13,14 +18,41 @@ document.querySelector('#connect').addEventListener('click', async () => {
 
 document.querySelector('#scan').addEventListener('click', async () => {
   await run('Application fields resolved. Review before applying.', async () => {
-    const fields = await scanActivePage();
-    if (!fields.length) throw new Error('No visible application fields found on this page.');
+    currentPage = await scanActivePage();
+    if (!currentPage.fields.length) throw new Error('No visible application fields found on this page.');
+    renderPageContext(currentPage);
     const payload = await callTool('career.resolve_application_fields', {
       applicationId: crypto.randomUUID(),
-      fields
+      fields: currentPage.fields
     });
     resolutions = Array.isArray(payload) ? payload : payload.fields || payload.resolutions || payload.data || [];
     renderResolutions(resolutions);
+    const email = resolutions.find((item) => /email|e-mail|username/i.test(item.label) && item.value)?.value;
+    if (email && !accountUsername.value) accountUsername.value = String(email);
+  });
+});
+
+document.querySelector('#prepare-account').addEventListener('click', async () => {
+  await run('Site account prepared. Review the page before creating it.', async () => {
+    requireAccountContext();
+    activeCredential = await callTool('career.prepare_site_credential', {
+      origin: currentPage.origin,
+      username: accountUsername.value.trim(),
+      _confirmed: true
+    });
+    await applyCredentials(activeCredential);
+  });
+});
+
+document.querySelector('#fill-login').addEventListener('click', async () => {
+  await run('Stored site credential filled. Complete MFA or sign in manually.', async () => {
+    requireAccountContext();
+    activeCredential = await callTool('career.get_site_credential', {
+      origin: currentPage.origin,
+      _confirmed: true
+    });
+    accountUsername.value = activeCredential.username || '';
+    await applyCredentials(activeCredential);
   });
 });
 
@@ -46,7 +78,7 @@ async function scanActivePage() {
     target: { tabId: tab.id },
     func: () => globalThis.__yuqiApplicationCopilot.scan()
   });
-  return result || [];
+  return result || { pageType: 'FORM', origin: '', fields: [] };
 }
 
 async function applyToActivePage(values) {
@@ -57,6 +89,17 @@ async function applyToActivePage(values) {
     func: (approved) => globalThis.__yuqiApplicationCopilot?.apply(approved) || 0
   });
   return result || 0;
+}
+
+async function applyCredentials(credential) {
+  const tab = await activeTab();
+  const [{ result }] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    args: [{ username: credential.username, password: credential.password }],
+    func: (value) => globalThis.__yuqiApplicationCopilot?.applyCredentials(value) || { applied: [] }
+  });
+  if (!result?.applied?.length) throw new Error('No visible username or password fields were found.');
+  return result;
 }
 
 async function activeTab() {
@@ -90,6 +133,20 @@ function renderResolutions(items) {
     return row;
   }));
   refreshApplyState();
+}
+
+function renderPageContext(page) {
+  pageContext.hidden = false;
+  document.querySelector('#page-type').textContent = page.pageType.replaceAll('_', ' ');
+  document.querySelector('#page-origin').textContent = page.origin;
+  accountRoot.hidden = !['SIGN_UP', 'SIGN_IN'].includes(page.pageType);
+  document.querySelector('#prepare-account').hidden = page.pageType !== 'SIGN_UP';
+}
+
+function requireAccountContext() {
+  if (!currentPage || !['SIGN_UP', 'SIGN_IN'].includes(currentPage.pageType)) {
+    throw new Error('Scan a sign-up or sign-in page first.');
+  }
 }
 
 function refreshApplyState() {

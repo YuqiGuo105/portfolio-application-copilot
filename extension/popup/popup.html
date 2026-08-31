@@ -18,6 +18,26 @@
         <button id="scan">Scan this page</button>
       </div>
       <p id="status" role="status">Not connected</p>
+      <section id="page-context" class="page-context" hidden>
+        <div>
+          <span class="label">Detected workflow</span>
+          <strong id="page-type">Application</strong>
+        </div>
+        <small id="page-origin"></small>
+      </section>
+      <section id="account" class="account" hidden>
+        <div class="section-title">
+          <h2>Account assistant</h2>
+          <span>Per-site credential</span>
+        </div>
+        <label class="input-label" for="account-username">Account email or username</label>
+        <input id="account-username" type="email" autocomplete="off" placeholder="Review before creating an account">
+        <div class="account-actions">
+          <button id="prepare-account" class="secondary">Prepare sign-up</button>
+          <button id="fill-login">Fill login</button>
+        </div>
+        <p class="policy-note">CAPTCHA, MFA, terms acceptance and the final submit remain manual.</p>
+      </section>
       <section id="results" hidden>
         <div class="section-title">
           <h2>Field review</h2>
@@ -27,7 +47,7 @@
         <button id="apply" disabled>Apply approved fields</button>
       </section>
     </main>
-    <footer>Never auto-submits applications or guesses sensitive answers.</footer>
+    <footer>Fills reviewed fields. Never bypasses verification or auto-submits.</footer>
     <script type="module" src="popup.js"></script>
   </body>
 </html>
