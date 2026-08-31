@@ -3,6 +3,27 @@ server:
 spring:
   application:
     name: portfolio-application-copilot
+  datasource:
+    url: ${CAREER_DATABASE_URL:jdbc:postgresql://localhost:5432/portfolio_career}
+    username: ${CAREER_DATABASE_USERNAME:postgres}
+    password: ${CAREER_DATABASE_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: ${CAREER_DATABASE_POOL_SIZE:3}
+      minimum-idle: 0
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.default_schema: ${CAREER_DATABASE_SCHEMA:career}
+  flyway:
+    enabled: true
+    create-schemas: true
+    default-schema: ${CAREER_DATABASE_SCHEMA:career}
+    schemas: ${CAREER_DATABASE_SCHEMA:career}
+    table: career_flyway_schema_history
+    validate-on-migrate: true
   data:
     redis:
       url: ${VALKEY_URL:redis://localhost:6379}

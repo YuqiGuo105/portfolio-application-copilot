@@ -1,0 +1,11 @@
+{
+  "name": "yuqi-application-copilot-extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/form-scanner.e2e.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.1.0"
+  }
+}

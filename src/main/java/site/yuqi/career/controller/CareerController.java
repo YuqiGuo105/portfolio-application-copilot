@@ -3,17 +3,22 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 import site.yuqi.career.model.*;
 import site.yuqi.career.service.ApplicationFieldResolver;
+import site.yuqi.career.service.ApplicationWorkflowService;
 import site.yuqi.career.service.CandidateProfileService;
 import site.yuqi.career.service.SiteCredentialService;
+import site.yuqi.career.service.PrivateVaultService;
 import java.util.List;
 import java.util.Map;
 @RestController @RequestMapping("/internal/v1")
 public class CareerController {
     private final CandidateProfileService profiles; private final ApplicationFieldResolver resolver;
     private final SiteCredentialService credentials;
+    private final PrivateVaultService vault;
+    private final ApplicationWorkflowService workflows;
     public CareerController(CandidateProfileService profiles, ApplicationFieldResolver resolver,
-            SiteCredentialService credentials) {
-        this.profiles = profiles; this.resolver = resolver; this.credentials = credentials;
+            SiteCredentialService credentials, PrivateVaultService vault, ApplicationWorkflowService workflows) {
+        this.profiles = profiles; this.resolver = resolver; this.credentials = credentials; this.vault = vault;
+        this.workflows = workflows;
     }
     @GetMapping("/candidate-profile") public CandidateProfile profile() { return profiles.get(); }
     @PostMapping("/candidate-profile/refresh") public CandidateProfile refreshProfile() { return profiles.refresh(); }
@@ -30,6 +35,48 @@ public class CareerController {
     @PostMapping("/site-credentials/prepare") public SiteCredential prepareSiteCredential(
             @Valid @RequestBody SiteCredentialRequest request) {
         return credentials.prepare(request.origin(), request.username());
+    }
+
+    @GetMapping("/private-resumes") public List<PrivateResumeView> privateResumes() { return vault.listResumes(); }
+    @GetMapping("/private-resumes/{id}") public PrivateResumeView privateResume(@PathVariable String id) { return vault.getResume(id); }
+    @PostMapping("/private-resumes") public PrivateResumeView createPrivateResume(@Valid @RequestBody PrivateResumeRequest request) { return vault.createResume(request); }
+    @PutMapping("/private-resumes/{id}") public PrivateResumeView updatePrivateResume(@PathVariable String id, @Valid @RequestBody PrivateResumeRequest request) { return vault.updateResume(id, request); }
+    @DeleteMapping("/private-resumes/{id}") @ResponseStatus(org.springframework.http.HttpStatus.NO_CONTENT)
+    public void deletePrivateResume(@PathVariable String id) { vault.deleteResume(id); }
+    @GetMapping("/private-answers") public Map<String, Object> privateAnswers() { return vault.getAnswers(); }
+    @PutMapping("/private-answers/{key}") public Map<String, Object> putPrivateAnswer(@PathVariable String key, @Valid @RequestBody PrivateAnswerRequest request) { return vault.putAnswer(key, request.value()); }
+    @DeleteMapping("/private-answers/{key}") public Map<String, Object> deletePrivateAnswer(@PathVariable String key) { return vault.deleteAnswer(key); }
+
+    @PostMapping("/application-workflows")
+    public ApplicationWorkflowView startWorkflow(@Valid @RequestBody StartApplicationWorkflowRequest request) {
+        return workflows.start(request);
+    }
+    @GetMapping("/application-workflows/{applicationId}")
+    public ApplicationWorkflowView workflow(@PathVariable String applicationId) { return workflows.get(applicationId); }
+    @PutMapping("/application-workflows/{applicationId}/resolution")
+    public ApplicationWorkflowView recordResolution(@PathVariable String applicationId,
+            @Valid @RequestBody ApplicationResolutionRequest request) {
+        return workflows.recordResolution(applicationId, request);
+    }
+    @PutMapping("/application-workflows/{applicationId}/review")
+    public ApplicationWorkflowView recordReview(@PathVariable String applicationId,
+            @Valid @RequestBody ApplicationReviewRequest request) {
+        return workflows.recordReview(applicationId, request);
+    }
+    @PutMapping("/application-workflows/{applicationId}/fill")
+    public ApplicationWorkflowView recordFill(@PathVariable String applicationId,
+            @Valid @RequestBody ApplicationFillRequest request) {
+        return workflows.recordFill(applicationId, request);
+    }
+    @PutMapping("/application-workflows/{applicationId}/submission")
+    public ApplicationWorkflowView recordSubmission(@PathVariable String applicationId,
+            @Valid @RequestBody SubmissionReceiptRequest request) {
+        return workflows.recordSubmission(applicationId, request);
+    }
+    @PutMapping("/application-workflows/{applicationId}/confirmation")
+    public ApplicationWorkflowView confirmSubmission(@PathVariable String applicationId,
+            @Valid @RequestBody ApplicationConfirmationRequest request) {
+        return workflows.confirm(applicationId, request);
     }
 
     @ResponseStatus(org.springframework.http.HttpStatus.NOT_FOUND)

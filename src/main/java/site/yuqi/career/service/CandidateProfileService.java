@@ -10,15 +10,15 @@ import java.time.Instant;
 import java.util.*;
 @Service
 public class CandidateProfileService implements CandidateProfileProvider {
-    private final McpGatewayClient gateway; private final CareerStore store; private final ObjectMapper mapper;
-    public CandidateProfileService(McpGatewayClient gateway, CareerStore store, ObjectMapper mapper) { this.gateway = gateway; this.store = store; this.mapper = mapper; }
+    private final McpGatewayClient gateway; private final CareerStore store; private final ObjectMapper mapper; private final PrivateVaultService vault;
+    public CandidateProfileService(McpGatewayClient gateway, CareerStore store, ObjectMapper mapper, PrivateVaultService vault) { this.gateway = gateway; this.store = store; this.mapper = mapper; this.vault = vault; }
     @Override
     public CandidateProfile get() {
         CandidateProfile publicProfile = store.getProfile().orElseGet(this::refreshPublicProfile);
-        return withPrivateAnswers(publicProfile, store.getPrivateAnswers());
+        return withPrivateAnswers(publicProfile, vault.getAnswers());
     }
     public CandidateProfile refresh() {
-        return withPrivateAnswers(refreshPublicProfile(), store.getPrivateAnswers());
+        return withPrivateAnswers(refreshPublicProfile(), vault.getAnswers());
     }
     private CandidateProfile refreshPublicProfile() {
         List<Map<String, Object>> experience = gateway.searchContent("Yuqi Guo software engineer", "EXPERIENCE", 20);
@@ -30,9 +30,7 @@ public class CandidateProfileService implements CandidateProfileProvider {
         store.putProfile(profile); return profile;
     }
     public CandidateProfile updatePrivateAnswers(Map<String, Object> updates) {
-        Map<String, Object> merged = new LinkedHashMap<>(store.getPrivateAnswers());
-        updates.forEach((key, value) -> { if (value == null) merged.remove(key); else merged.put(normalize(key), value); });
-        store.putPrivateAnswers(Map.copyOf(merged));
+        Map<String, Object> merged = vault.mergeAnswers(updates);
         CandidateProfile publicProfile = store.getProfile().orElseGet(this::refreshPublicProfile);
         return withPrivateAnswers(publicProfile, Map.copyOf(merged));
     }

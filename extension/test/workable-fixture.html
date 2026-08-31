@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Software Engineer - Workable fixture</title>
+    <style>
+      body { font: 16px system-ui; margin: 40px auto; max-width: 720px; }
+      form { display: grid; gap: 10px; }
+      textarea { min-height: 100px; }
+      .fixture-controls { display: flex; gap: 8px; margin: 24px 0; }
+      output { display: block; padding: 16px; background: #f3f5f7; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Apply for Software Engineer</h1>
+      <form>
+        <label for="firstname">First name</label><input id="firstname" name="firstname" required>
+        <label for="lastname">Last name</label><input id="lastname" name="lastname" required>
+        <label for="email">Email</label><input id="email" name="email" type="email" required>
+        <label for="resume">Resume</label><input id="resume" name="resume" type="file" accept="application/pdf">
+        <label for="motivation">Why are you interested?</label><textarea id="motivation" name="motivation"></textarea>
+        <button type="submit">Submit application</button>
+      </form>
+      <section aria-label="Fixture controls">
+        <div class="fixture-controls">
+          <button id="fixture-scan" type="button">Run scanner</button>
+          <button id="fixture-fill" type="button">Apply fixture values</button>
+          <button id="fixture-attach" type="button">Attach fixture resume</button>
+        </div>
+        <output id="fixture-result">Ready</output>
+      </section>
+    </main>
+    <script src="../content/form-scanner.js"></script>
+    <script>
+      let submitCount = 0;
+      const result = document.querySelector('#fixture-result');
+      document.querySelector('form').addEventListener('submit', (event) => {
+        event.preventDefault();
+        submitCount += 1;
+      });
+      document.querySelector('#fixture-scan').addEventListener('click', () => {
+        const scan = globalThis.__yuqiApplicationCopilot.scan();
+        result.textContent = JSON.stringify({ ...scan, submitCount }, null, 2);
+      });
+      document.querySelector('#fixture-fill').addEventListener('click', () => {
+        const applied = globalThis.__yuqiApplicationCopilot.apply({
+          firstname: 'Yuqi', lastname: 'Guo', email: 'fixture@example.test',
+          motivation: 'Fixture-only distributed systems answer.'
+        });
+        result.textContent = JSON.stringify({ applied, submitCount,
+          firstName: document.querySelector('#firstname').value,
+          lastName: document.querySelector('#lastname').value,
+          email: document.querySelector('#email').value,
+          motivation: document.querySelector('#motivation').value }, null, 2);
+      });
+      document.querySelector('#fixture-attach').addEventListener('click', async () => {
+        const payload = { name: 'fixture-resume.pdf', type: 'application/pdf',
+          dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y=' };
+        const attached = await globalThis.__yuqiApplicationCopilot.applyFile('resume', payload);
+        result.textContent = JSON.stringify({ attached, submitCount,
+          inputFile: document.querySelector('#resume').files[0]?.name }, null, 2);
+      });
+    </script>
+  </body>
+</html>

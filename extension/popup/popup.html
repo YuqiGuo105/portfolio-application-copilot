@@ -7,28 +7,67 @@
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <header>
-      <p class="eyebrow">YUQI.SITE / MCP</p>
-      <h1>Application Copilot</h1>
-      <p>Review first. Fill second. Submit stays with you.</p>
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true">YQ</div>
+      <div class="brand-copy">
+        <p class="eyebrow">YUQI.SITE</p>
+        <h1>Application Copilot</h1>
+      </div>
+      <span id="connection-state" class="connection-state" data-connected="false">Offline</span>
     </header>
     <main>
-      <div class="toolbar">
-        <button id="connect" class="secondary">Connect admin</button>
-        <button id="scan">Scan this page</button>
-      </div>
-      <p id="status" role="status">Not connected</p>
-      <section id="page-context" class="page-context" hidden>
+      <section class="hero-panel">
         <div>
-          <span class="label">Detected workflow</span>
-          <strong id="page-type">Application</strong>
+          <p class="hero-label">ASSISTED APPLICATION</p>
+          <h2>Review before anything is filled</h2>
+          <p>Resume-backed answers, policy checks, and a manual final submit.</p>
         </div>
-        <small id="page-origin"></small>
+        <div class="toolbar">
+          <button id="connect" class="secondary">Connect</button>
+          <button id="scan">Scan page</button>
+        </div>
+        <p id="status" role="status">Not connected</p>
       </section>
+
+      <section id="page-context" class="page-context" hidden>
+        <div class="company-mark" aria-hidden="true">AP</div>
+        <div class="page-copy">
+          <span class="label">CURRENT WORKFLOW</span>
+          <strong id="page-type">Application</strong>
+          <small id="page-origin"></small>
+        </div>
+        <span class="review-badge">Review</span>
+      </section>
+
+      <section id="review-summary" class="review-summary" hidden>
+        <div class="summary-heading">
+          <div>
+            <strong id="progress-label">0 / 0 fields ready</strong>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="progress-track" aria-hidden="true"><span id="progress-fill"></span></div>
+        </div>
+        <div class="summary-grid" aria-label="Field resolution summary">
+          <div><strong id="ready-count">0</strong><span>Ready</span></div>
+          <div><strong id="review-count">0</strong><span>Review</span></div>
+          <div><strong id="manual-count">0</strong><span>Manual</span></div>
+        </div>
+      </section>
+
+      <div class="workflow-shell">
+        <ol class="workflow" aria-label="Application workflow">
+          <li data-state="scan" class="active">Scan</li>
+          <li data-state="resolve">Resolve</li>
+          <li data-state="review">Review</li>
+          <li data-state="fill">Fill</li>
+          <li data-state="ready">Ready</li>
+        </ol>
+      </div>
+
       <section id="account" class="account" hidden>
         <div class="section-title">
           <h2>Account assistant</h2>
-          <span>Per-site credential</span>
+          <span class="section-tag">Protected vault</span>
         </div>
         <label class="input-label" for="account-username">Account email or username</label>
         <input id="account-username" type="email" autocomplete="off" placeholder="Review before creating an account">
@@ -38,16 +77,32 @@
         </div>
         <p class="policy-note">CAPTCHA, MFA, terms acceptance and the final submit remain manual.</p>
       </section>
+
+      <section id="resume-upload" class="resume-upload" hidden>
+        <div class="section-title">
+          <h2>Resume upload</h2>
+          <span id="resume-field-label" class="section-tag">ATS attachment</span>
+        </div>
+        <input id="resume-file" type="file" accept="application/pdf,.pdf">
+        <p class="policy-note">The file stays local until you press Apply. Codex never receives its contents.</p>
+      </section>
+
       <section id="results" hidden>
         <div class="section-title">
-          <h2>Field review</h2>
+          <h2>Application fields</h2>
           <span id="count"></span>
         </div>
         <div id="fields"></div>
-        <button id="apply" disabled>Apply approved fields</button>
+        <div class="apply-panel">
+          <div>
+            <strong>Ready to fill?</strong>
+            <span>Only selected, reviewed values are applied.</span>
+          </div>
+          <button id="apply" disabled>Apply selected</button>
+        </div>
       </section>
     </main>
-    <footer>Fills reviewed fields. Never bypasses verification or auto-submits.</footer>
+    <footer><span aria-hidden="true">&#9679;</span> Final submission, CAPTCHA, MFA, and signatures always stay with you.</footer>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

@@ -33,4 +33,20 @@ class ApplicationFieldResolverTest {
         assertThat(result.get(1).status()).isEqualTo(FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION);
         assertThat(result.get(1).value()).isEqualTo("No");
     }
+
+    @Test void keepsStoredI140StatusReviewable() {
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(), List.of(), Map.of("do you have an approved i 140", "No"),
+                new CandidateProfile.Source("mcp", List.of("admin.search_content"), "fresh"));
+
+        FieldResolution result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-3", List.of(
+                        new ResolveFieldsRequest.Field(
+                                "i140", "Do you have an approved I-140?", "select", List.of("Yes", "No")))))
+                .get(0);
+
+        assertThat(result.status()).isEqualTo(FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION);
+        assertThat(result.value()).isEqualTo("No");
+        assertThat(result.source()).isEqualTo("encrypted application memory");
+    }
 }
