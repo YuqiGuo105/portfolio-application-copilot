@@ -37,6 +37,12 @@ career:
     base-url: ${MCP_GATEWAY_URL:http://localhost:8091}
     token: ${MCP_GATEWAY_INTERNAL_TOKEN:}
     timeout: ${MCP_GATEWAY_TIMEOUT:12s}
+  resume-storage:
+    base-url: ${SUPABASE_URL:}
+    service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
+    bucket: ${CAREER_RESUME_BUCKET:career-resumes}
+    max-bytes: ${CAREER_RESUME_MAX_BYTES:2097152}
+    download-ttl: ${CAREER_RESUME_DOWNLOAD_TTL:2m}
 management:
   endpoints:
     web:

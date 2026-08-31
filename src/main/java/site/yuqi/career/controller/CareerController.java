@@ -7,6 +7,7 @@ import site.yuqi.career.service.ApplicationWorkflowService;
 import site.yuqi.career.service.CandidateProfileService;
 import site.yuqi.career.service.SiteCredentialService;
 import site.yuqi.career.service.PrivateVaultService;
+import site.yuqi.career.service.ResumeAssetService;
 import java.util.List;
 import java.util.Map;
 @RestController @RequestMapping("/internal/v1")
@@ -15,10 +16,13 @@ public class CareerController {
     private final SiteCredentialService credentials;
     private final PrivateVaultService vault;
     private final ApplicationWorkflowService workflows;
+    private final ResumeAssetService resumeAssets;
     public CareerController(CandidateProfileService profiles, ApplicationFieldResolver resolver,
-            SiteCredentialService credentials, PrivateVaultService vault, ApplicationWorkflowService workflows) {
+            SiteCredentialService credentials, PrivateVaultService vault, ApplicationWorkflowService workflows,
+            ResumeAssetService resumeAssets) {
         this.profiles = profiles; this.resolver = resolver; this.credentials = credentials; this.vault = vault;
         this.workflows = workflows;
+        this.resumeAssets = resumeAssets;
     }
     @GetMapping("/candidate-profile") public CandidateProfile profile() { return profiles.get(); }
     @PostMapping("/candidate-profile/refresh") public CandidateProfile refreshProfile() { return profiles.refresh(); }
@@ -46,6 +50,21 @@ public class CareerController {
     @GetMapping("/private-answers") public Map<String, Object> privateAnswers() { return vault.getAnswers(); }
     @PutMapping("/private-answers/{key}") public Map<String, Object> putPrivateAnswer(@PathVariable String key, @Valid @RequestBody PrivateAnswerRequest request) { return vault.putAnswer(key, request.value()); }
     @DeleteMapping("/private-answers/{key}") public Map<String, Object> deletePrivateAnswer(@PathVariable String key) { return vault.deleteAnswer(key); }
+
+    @GetMapping("/resume-assets") public List<ResumeAssetView> resumeAssets() { return resumeAssets.list(); }
+    @GetMapping("/resume-assets/active") public ResumeAssetView activeResumeAsset() { return resumeAssets.active(); }
+    @PostMapping("/resume-assets/uploads") public ResumeUploadTicket prepareResumeUpload(
+            @Valid @RequestBody ResumeUploadRequest request) { return resumeAssets.prepareUpload(request); }
+    @PostMapping("/resume-assets/{id}/complete") public ResumeAssetView completeResumeUpload(
+            @PathVariable String id, @Valid @RequestBody ResumeCompleteRequest request) {
+        return resumeAssets.complete(id, request);
+    }
+    @PostMapping("/resume-assets/{id}/activate") public ResumeAssetView activateResumeAsset(@PathVariable String id) {
+        return resumeAssets.activate(id);
+    }
+    @GetMapping("/resume-assets/active/download") public ResumeDownloadTicket activeResumeDownload() {
+        return resumeAssets.activeDownload();
+    }
 
     @PostMapping("/application-workflows")
     public ApplicationWorkflowView startWorkflow(@Valid @RequestBody StartApplicationWorkflowRequest request) {

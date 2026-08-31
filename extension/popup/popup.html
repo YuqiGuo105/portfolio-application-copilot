@@ -80,11 +80,20 @@
 
       <section id="resume-upload" class="resume-upload" hidden>
         <div class="section-title">
-          <h2>Resume upload</h2>
+          <h2>Application resume</h2>
           <span id="resume-field-label" class="section-tag">ATS attachment</span>
         </div>
+        <div id="managed-resume" class="managed-resume" hidden>
+          <span class="managed-resume-icon" aria-hidden="true">PDF</span>
+          <span>
+            <strong id="managed-resume-name">Managed resume</strong>
+            <small id="managed-resume-meta">Private Resume Asset Vault</small>
+          </span>
+          <span class="active-badge">Active</span>
+        </div>
+        <label class="input-label" for="resume-file">Optional one-time override</label>
         <input id="resume-file" type="file" accept="application/pdf,.pdf">
-        <p class="policy-note">The file stays local until you press Apply. Codex never receives its contents.</p>
+        <p class="policy-note">Apply uses the active private resume by default. A local override stays in this browser. Both are attached only after you press Apply.</p>
       </section>
 
       <section id="results" hidden>

@@ -17,6 +17,7 @@ let resolutions = [];
 let currentPage = null;
 let activeCredential = null;
 let applicationId = null;
+let activeResumeAsset = null;
 
 document.querySelector('#connect').addEventListener('click', async () => {
   const connected = await run('Connected to the authenticated MCP cluster.', connectAdminSession);
@@ -53,13 +54,16 @@ document.querySelector('#scan').addEventListener('click', async () => {
     });
     setWorkflow('resolve');
     setStatus('Resolving known fields through the policy-aware Career service...');
-    const [payload, profile] = await Promise.all([
+    const [payload, profile, managedResume] = await Promise.all([
       callTool('career.resolve_application_fields', {
         applicationId,
         fields: currentPage.fields
       }),
-      callTool('career.get_candidate_profile', {})
+      callTool('career.get_candidate_profile', {}),
+      loadActiveResumeAsset()
     ]);
+    activeResumeAsset = managedResume;
+    renderManagedResume(activeResumeAsset);
     resolutions = normalizeResolutions(payload);
 
     const unresolved = new Set(resolutions.filter((item) => item.status === 'UNSUPPORTED').map((item) => item.fieldId));
@@ -119,14 +123,18 @@ applyButton.addEventListener('click', async () => {
       const item = resolutions.find((resolution) => resolution.fieldId === checkbox.dataset.fieldId);
       if (item?.value != null) approved[item.fieldId] = item.value;
     });
-    const selectedResume = resumeFile.files?.[0];
-    if (!Object.keys(approved).length && !selectedResume) throw new Error('Select at least one reviewed field or a resume.');
+    const localResume = resumeFile.files?.[0];
+    const hasResume = Boolean(currentPage.files.length && (localResume || activeResumeAsset));
+    if (!Object.keys(approved).length && !hasResume) throw new Error('Select at least one reviewed field or configure an active resume.');
     if (!applicationId) throw new Error('The application workflow expired. Scan the page again.');
     await callTool('career.record_application_review', {
       applicationId, approvedFields: Object.keys(approved).length
     });
     const applied = Object.keys(approved).length ? await applyToActivePage(approved) : 0;
     if (Object.keys(approved).length && !applied) throw new Error('The page changed before values could be applied. Scan again.');
+    const selectedResume = currentPage.files.length
+      ? localResume || (activeResumeAsset ? await downloadManagedResume() : null)
+      : null;
     if (selectedResume) await applyResumeToActivePage(currentPage.files[0].id, selectedResume);
     await callTool('career.record_application_fill', {
       applicationId,
@@ -170,6 +178,34 @@ async function applyResumeToActivePage(fieldId, file) {
     func: async (id, value) => globalThis.__yuqiApplicationCopilot?.applyFile(id, value) });
   if (!result?.name) throw new Error('The ATS did not accept the selected resume.');
   return result;
+}
+
+async function loadActiveResumeAsset() {
+  try {
+    return await callTool('career.get_active_resume_asset', {});
+  } catch (error) {
+    if (/not found|no active|404/i.test(error.message || '')) return null;
+    throw error;
+  }
+}
+
+async function downloadManagedResume() {
+  setStatus('Fetching the active resume through a short-lived private download ticket...');
+  const ticket = await callTool('career.get_active_resume_download', { _confirmed: true });
+  const response = await fetch(ticket.downloadUrl, { cache: 'no-store', credentials: 'omit' });
+  if (!response.ok) throw new Error(`Managed resume download failed (${response.status}).`);
+  const bytes = await response.arrayBuffer();
+  if (bytes.byteLength !== Number(ticket.sizeBytes)) throw new Error('Managed resume size verification failed.');
+  const actualHash = await sha256Hex(bytes);
+  if (ticket.sha256 && actualHash !== String(ticket.sha256).toLowerCase()) {
+    throw new Error('Managed resume integrity verification failed.');
+  }
+  return new File([bytes], ticket.fileName, { type: ticket.mimeType || 'application/pdf' });
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, '0')).join('');
 }
 
 async function applyCredentials(credential) {
@@ -296,12 +332,23 @@ function renderPageContext(page) {
   document.querySelector('#resume-field-label').textContent = page.files[0]?.label || 'ATS attachment';
 }
 
+function renderManagedResume(asset) {
+  const root = document.querySelector('#managed-resume');
+  root.hidden = !asset;
+  if (!asset) return;
+  document.querySelector('#managed-resume-name').textContent = asset.displayName || 'Managed resume.pdf';
+  const size = asset.sizeBytes ? `${Math.round(asset.sizeBytes / 1024)} KB` : 'Pending validation';
+  const hash = asset.sha256 ? ` · ${asset.sha256.slice(0, 10)}...` : '';
+  document.querySelector('#managed-resume-meta').textContent = `Private vault · ${size}${hash}`;
+}
+
 function requireAccountContext() {
   if (!currentPage || !['SIGN_UP', 'SIGN_IN'].includes(currentPage.pageType)) throw new Error('Scan a sign-up or sign-in page first.');
 }
 
 function refreshApplyState() {
-  applyButton.disabled = !document.querySelector('[data-field-id]:checked') && !resumeFile.files?.length;
+  const managedResumeAvailable = Boolean(currentPage?.files?.length && activeResumeAsset);
+  applyButton.disabled = !document.querySelector('[data-field-id]:checked') && !resumeFile.files?.length && !managedResumeAvailable;
 }
 
 resumeFile.addEventListener('change', refreshApplyState);
