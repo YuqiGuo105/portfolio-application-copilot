@@ -146,7 +146,7 @@ The fixture asserts that the scanner detects the application and resume controls
 
 ## Deployment
 
-`cloudbuild.yaml` deploys the Java service to Cloud Run with one vCPU, 512 MiB memory, concurrency 20, `min-instances=0`, and `max-instances=1`. This preserves scale-to-zero cost behavior. The Cloud Run ingress can reach the health endpoint, while every `/internal/**` operation fails closed without the shared service token. Secrets are injected from Secret Manager; never commit them or expose them to the extension.
+`cloudbuild.yaml` deploys the Java service to Cloud Run with one vCPU, 512 MiB memory, concurrency 20, `min-instances=0`, and `max-instances=1`. This preserves scale-to-zero cost behavior. The service uses routable Cloud Run ingress so the MCP Gateway can call it without a VPC connector, while Cloud Run IAM rejects anonymous callers and only the gateway runtime service account receives `roles/run.invoker`. Every `/internal/**` operation additionally fails closed without the shared service token. Secrets are injected from Secret Manager; never commit them or expose them to the extension.
 
 The Career Vault uses a dedicated `career` schema in the managed PostgreSQL instance. Cloud Run maps the existing `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, and `SPRING_DATASOURCE_PASSWORD` secrets to the service's `CAREER_DATABASE_*` environment variables, avoiding duplicate database credentials. `CAREER_OWNER_KEY` encrypts resume bodies and private answers with AES-GCM before persistence. PostgreSQL is authoritative; Valkey is only a bounded cache, so cache eviction never loses the application profile. Flyway owns only the `career` schema and applies its private-vault migrations at startup.
 

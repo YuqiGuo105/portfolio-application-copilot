@@ -18,8 +18,8 @@ steps:
       - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$COMMIT_SHA
       - --region=${_REGION}
       - --platform=managed
-      - --allow-unauthenticated
-      - --ingress=internal
+      - --no-allow-unauthenticated
+      - --ingress=all
       - --service-account=portfolio-application-copilot@$PROJECT_ID.iam.gserviceaccount.com
       - --cpu=1
       - --memory=512Mi
