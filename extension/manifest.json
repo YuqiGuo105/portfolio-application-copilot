@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Yuqi Application Copilot",
+  "version": "0.1.0",
+  "description": "Review and fill job applications through Yuqi's authenticated MCP platform.",
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["https://www.yuqi.site/*"],
+  "action": {
+    "default_title": "Yuqi Application Copilot",
+    "default_popup": "popup/popup.html"
+  },
+  "options_page": "options/options.html"
+}

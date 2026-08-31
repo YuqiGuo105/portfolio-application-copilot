@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Application Copilot</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <header>
+      <p class="eyebrow">YUQI.SITE / MCP</p>
+      <h1>Application Copilot</h1>
+      <p>Review first. Fill second. Submit stays with you.</p>
+    </header>
+    <main>
+      <div class="toolbar">
+        <button id="connect" class="secondary">Connect admin</button>
+        <button id="scan">Scan this page</button>
+      </div>
+      <p id="status" role="status">Not connected</p>
+      <section id="results" hidden>
+        <div class="section-title">
+          <h2>Field review</h2>
+          <span id="count"></span>
+        </div>
+        <div id="fields"></div>
+        <button id="apply" disabled>Apply approved fields</button>
+      </section>
+    </main>
+    <footer>Never auto-submits applications or guesses sensitive answers.</footer>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

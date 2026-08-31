@@ -1,0 +1,33 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: [build, -t, ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$COMMIT_SHA, .]
+  - name: gcr.io/cloud-builders/docker
+    args: [push, ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$COMMIT_SHA]
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$COMMIT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --service-account=portfolio-application-copilot@$PROJECT_ID.iam.gserviceaccount.com
+      - --cpu=1
+      - --memory=512Mi
+      - --concurrency=20
+      - --min-instances=0
+      - --max-instances=1
+      - --timeout=30s
+      - --set-secrets=CAREER_INTERNAL_TOKEN=CAREER_INTERNAL_TOKEN:latest,CAREER_OWNER_KEY=CAREER_OWNER_KEY:latest,MCP_GATEWAY_INTERNAL_TOKEN=MCP_GATEWAY_INTERNAL_TOKEN:latest,VALKEY_URL=VALKEY_URL:latest
+      - --set-env-vars=MCP_GATEWAY_URL=${_MCP_GATEWAY_URL},CAREER_PROFILE_TTL=6h
+
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: portfolio
+  _SERVICE: portfolio-application-copilot
+  _MCP_GATEWAY_URL: https://portfolio-mcp-gateway-702193211434.us-central1.run.app
+
+options:
+  logging: CLOUD_LOGGING_ONLY

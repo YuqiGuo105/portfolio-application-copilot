@@ -1,0 +1,26 @@
+server:
+  port: ${PORT:8096}
+spring:
+  application:
+    name: portfolio-application-copilot
+  data:
+    redis:
+      url: ${VALKEY_URL:redis://localhost:6379}
+      ssl:
+        enabled: ${VALKEY_SSL:false}
+career:
+  internal-token: ${CAREER_INTERNAL_TOKEN:}
+  owner-key: ${CAREER_OWNER_KEY:}
+  profile-ttl: ${CAREER_PROFILE_TTL:6h}
+  mcp-gateway:
+    base-url: ${MCP_GATEWAY_URL:http://localhost:8091}
+    token: ${MCP_GATEWAY_INTERNAL_TOKEN:}
+    timeout: ${MCP_GATEWAY_TIMEOUT:12s}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: portfolio-application-copilot
