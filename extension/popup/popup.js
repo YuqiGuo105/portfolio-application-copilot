@@ -20,6 +20,7 @@ let activeCredential = null;
 let applicationId = null;
 let activeResumeAsset = null;
 let resumeAssetWarning = '';
+let managedResumeAttached = false;
 const signInButton = document.querySelector('#sign-in');
 const scanButton = document.querySelector('#scan');
 let operationRunning = false;
@@ -70,6 +71,7 @@ scanButton.addEventListener('click', async () => {
       loadActiveResumeAsset()
     ]);
     activeResumeAsset = managedResume;
+    managedResumeAttached = false;
     renderManagedResume(activeResumeAsset);
     resolutions = normalizeResolutions(payload);
 
@@ -96,10 +98,11 @@ scanButton.addEventListener('click', async () => {
     const email = resolutions.find((item) => /email|e-mail|username/i.test(item.label) && item.value)?.value;
     if (email && !accountUsername.value) accountUsername.value = String(email);
     setWorkflow('review');
-    const resolvedCount = resolutions.filter((item) => item.value != null).length;
+    const resolvedCount = resolutions.filter((item) => item.status === 'RESOLVED' && item.value != null).length;
+    const reviewCount = resolutions.filter((item) => item.status === 'NEEDS_CONFIRMATION' && item.value != null).length;
     const resolutionStatus = codexAvailable
-      ? `${resolvedCount} value(s) ready for review. Local Codex suggestions remain unchecked.`
-      : `${resolvedCount} deterministic value(s) ready. Local Codex is unavailable; unresolved fields were left blank.`;
+      ? `${resolvedCount} verified value(s) ready and ${reviewCount} sensitive value(s) await confirmation. Local Codex suggestions remain unchecked.`
+      : `${resolvedCount} verified value(s) ready and ${reviewCount} sensitive value(s) await confirmation. Local Codex is unavailable; unresolved fields were left blank.`;
     const deterministic = Object.fromEntries(resolutions
       .filter((item) => item.status === 'RESOLVED' && item.value != null)
       .map((item) => [item.fieldId, item.value]));
@@ -108,10 +111,18 @@ scanButton.addEventListener('click', async () => {
     if (activeResumeAsset && resumeField) {
       const selectedResume = await downloadManagedResume();
       await applyResumeToActivePage(resumeField.id, selectedResume);
-      await recordCompletedFill(autoApplied, true);
-      applyButton.disabled = true;
-      applyButton.textContent = 'Safe fields applied';
-      setStatus(`${autoApplied} deterministic field(s) filled and the managed resume attached. Review the remaining fields; final submission stays manual.`);
+      managedResumeAttached = true;
+      if (reviewCount) {
+        setWorkflow('review');
+        applyButton.disabled = false;
+        applyButton.textContent = `Apply ${reviewCount} reviewed answer${reviewCount === 1 ? '' : 's'}`;
+        setStatus(`${autoApplied} verified field(s) filled and the managed resume attached. Confirm the ${reviewCount} preselected sensitive answer${reviewCount === 1 ? '' : 's'}, then apply them once.`);
+      } else {
+        await recordCompletedFill(autoApplied, true);
+        applyButton.disabled = true;
+        applyButton.textContent = 'Safe fields applied';
+        setStatus(`${autoApplied} deterministic field(s) filled and the managed resume attached. Review the page; final submission stays manual.`);
+      }
     } else {
       setWorkflow('review');
       const resumeStatus = resumeField
@@ -158,14 +169,15 @@ applyButton.addEventListener('click', async () => {
     const applied = Object.keys(approved).length ? await applyToActivePage(approved) : 0;
     if (Object.keys(approved).length && !applied) throw new Error('The page changed before values could be applied. Scan again.');
     const resumeField = managedResumeField();
-    const selectedResume = resumeField
+    const selectedResume = resumeField && !managedResumeAttached
       ? localResume || (activeResumeAsset ? await downloadManagedResume() : null)
       : null;
     if (selectedResume) await applyResumeToActivePage(resumeField.id, selectedResume);
-    await recordCompletedFill(applied, Boolean(selectedResume), false);
+    managedResumeAttached = managedResumeAttached || Boolean(selectedResume);
+    await recordCompletedFill(applied, managedResumeAttached, false);
     const action = currentPage.action?.kind === 'FINAL_SUBMIT' ? `Final action detected: “${currentPage.action.text}”.`
       : currentPage.action?.kind === 'CONTINUE' ? `Next step detected: “${currentPage.action.text}”.` : '';
-    const resumeStatus = selectedResume ? ' and resume attached'
+    const resumeStatus = managedResumeAttached ? ' and resume attached'
       : currentPage.files.length ? '. Resume was not attached; choose a local PDF or restore the managed Resume Vault' : '';
     setStatus(`${applied} field(s) filled${resumeStatus}. ${action} Review the page; submission remains manual.`,
       Boolean(currentPage.files.length && !selectedResume));
@@ -339,7 +351,7 @@ function renderResolution(item, state) {
     checkbox.type = 'checkbox';
     checkbox.dataset.fieldId = item.fieldId;
     checkbox.disabled = item.value == null;
-    checkbox.checked = item.status === 'RESOLVED' && item.value != null;
+    checkbox.checked = item.value != null;
     checkbox.addEventListener('change', refreshApplyState);
     const text = document.createElement('span');
     const title = document.createElement('strong');

@@ -1,10 +1,10 @@
 globalThis.__yuqiApplicationCopilot = {
   scan() {
-    const controls = formControls().filter(isVisible);
+    const controls = formControls();
     const indexedControls = controls.map((element, index) => ({ element, index }));
-    const fields = describeApplicationFields(indexedControls);
+    const fields = describeApplicationFields(indexedControls.filter(({ element }) => isVisible(element)));
     const files = indexedControls
-      .filter(({ element }) => element.type === 'file')
+      .filter(({ element }) => isUsableFileInput(element))
       .map(({ element, index }) => {
         const label = labelFor(element) || 'Resume or attachment';
         return { id: stableId(element, index), requirementId: stableId(element, index), label,
@@ -70,6 +70,9 @@ globalThis.__yuqiApplicationCopilot = {
 function formControls() {
   return [...document.querySelectorAll('input, select, textarea, [role="combobox"], button[aria-haspopup="listbox"]')]
     .filter((element, index, controls) => controls.indexOf(element) === index);
+}
+function isUsableFileInput(element) {
+  return element.type === 'file' && !element.disabled;
 }
 function describeApplicationFields(indexedControls) {
   const fields = [];
@@ -190,11 +193,12 @@ function customOptions(element) {
 }
 function linkedOptions(element) {
   const ids = `${element.getAttribute('aria-controls') || ''} ${element.getAttribute('aria-owns') || ''}`.trim().split(/\s+/).filter(Boolean);
-  return ids.flatMap((id) => [...(document.getElementById(id)?.querySelectorAll('[role="option"], option') || [])]);
+  return ids.flatMap((id) => [...(document.getElementById(id)?.querySelectorAll('[role="option"], [role="menuitemradio"], option') || [])]);
 }
 async function chooseCustomOption(element, value) {
   element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
   element.click();
+  if (element.tagName === 'INPUT') setValue(element, value);
   const options = await waitForOptions(element);
   const option = findMatchingOption(options, value);
   if (!option) return false;
@@ -206,7 +210,7 @@ async function chooseCustomOption(element, value) {
 async function waitForOptions(element) {
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const linked = linkedOptions(element).filter(isVisible);
-    const visible = [...document.querySelectorAll('[role="option"]')].filter(isVisible);
+    const visible = [...document.querySelectorAll('[role="option"], [role="menuitemradio"]')].filter(isVisible);
     const options = linked.length ? linked : visible;
     if (options.length) return options;
     await new Promise((resolve) => setTimeout(resolve, 50));
