@@ -1,6 +1,6 @@
 import { AdminSessionError, connectAdminSession, openAdminLogin, restoreAdminSession } from '../shared/admin-session.js';
 import { calculateApplicationProgress } from '../shared/application-progress.js';
-import { classifyWithLocalCodex, resolveWithLocalCodex } from '../shared/codex-client.js';
+import { classifyWithLocalCodex } from '../shared/codex-client.js';
 import { callTool } from '../shared/mcp-client.js';
 
 const status = document.querySelector('#status');
@@ -66,32 +66,17 @@ scanButton.addEventListener('click', async () => {
     });
     setWorkflow('resolve');
     setStatus('Resolving known fields through the policy-aware Career service...');
-    const [payload, profile, managedResume] = await Promise.all([
+    const [payload, managedResume] = await Promise.all([
       callTool('career.resolve_application_fields', {
         applicationId,
         fields: currentPage.fields
       }),
-      callTool('career.get_candidate_profile', {}),
       loadActiveResumeAsset()
     ]);
     activeResumeAsset = managedResume;
     managedResumeAttached = false;
     renderManagedResume(activeResumeAsset);
     resolutions = normalizeResolutions(payload);
-
-    const unresolved = new Set(resolutions.filter((item) => item.status === 'UNSUPPORTED').map((item) => item.fieldId));
-    const unresolvedFields = currentPage.fields.filter((field) => unresolved.has(field.id));
-    let codexAvailable = true;
-    if (unresolvedFields.length) {
-      setStatus(`Asking local Codex for ${unresolvedFields.length} non-sensitive field suggestion(s)...`);
-      try {
-        const advice = await resolveWithLocalCodex({ page: currentPage, fields: unresolvedFields, profile });
-        resolutions = mergeCodexAdvice(resolutions, advice);
-      } catch (error) {
-        codexAvailable = false;
-        console.warn('Local Codex advisor unavailable', error);
-      }
-    }
     renderResolutions(resolutions);
     await callTool('career.record_application_resolution', {
       applicationId,
@@ -104,10 +89,9 @@ scanButton.addEventListener('click', async () => {
     setWorkflow('review');
     const resolvedCount = resolutions.filter((item) => item.status === 'RESOLVED' && item.value != null).length;
     const reviewCount = resolutions.filter((item) => item.status === 'NEEDS_CONFIRMATION' && item.value != null).length;
+    const manualCount = resolutions.filter((item) => item.status === 'UNSUPPORTED' || item.value == null).length;
     const modelStatus = `Question model: ${currentPage.questionModel || 'raw fallback'}.`;
-    const resolutionStatus = codexAvailable
-      ? `${resolvedCount} verified value(s) ready and ${reviewCount} sensitive value(s) await confirmation. Local Codex suggestions remain unchecked.`
-      : `${resolvedCount} verified value(s) ready and ${reviewCount} sensitive value(s) await confirmation. Local Codex is unavailable; unresolved fields were left blank.`;
+    const resolutionStatus = `${resolvedCount} verified value(s) ready and ${reviewCount} sensitive value(s) await confirmation. ${manualCount} field(s) require manual input.`;
     const deterministic = Object.fromEntries(resolutions
       .filter((item) => item.status === 'RESOLVED' && item.value != null)
       .map((item) => [item.fieldId, item.value]));
@@ -346,16 +330,6 @@ async function loadActiveWorkflow(origin) {
 function normalizeResolutions(payload) {
   const items = Array.isArray(payload) ? payload : payload.fields || payload.resolutions || payload.data || [];
   return items.map((item) => ({ ...item, fieldId: item.fieldId || item.id }));
-}
-
-function mergeCodexAdvice(items, advice) {
-  const byId = new Map(advice.map((item) => [item.fieldId, item]));
-  return items.map((item) => {
-    const suggestion = byId.get(item.fieldId);
-    if (!suggestion || suggestion.status !== 'SUGGESTION' || suggestion.value == null) return item;
-    return { ...item, value: suggestion.value, status: 'NEEDS_CONFIRMATION', source: 'local Codex suggestion',
-      confidence: suggestion.confidence, reason: suggestion.reason, codexSuggestion: true };
-  });
 }
 
 function renderResolutions(items) {
