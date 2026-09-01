@@ -373,11 +373,16 @@ function choiceMatches(candidate, requested) {
   const left = canonicalChoice(candidate);
   const right = canonicalChoice(requested);
   if (!left || !right) return false;
-  return left === right || left.includes(right) || right.includes(left);
+  if (left === right) return true;
+  const leftTokens = new Set(left.split(' '));
+  const rightTokens = new Set(right.split(' '));
+  if (leftTokens.size < 2 || rightTokens.size < 2) return false;
+  return [...leftTokens].every((token) => rightTokens.has(token)) ||
+    [...rightTokens].every((token) => leftTokens.has(token));
 }
 function canonicalChoice(value) {
   const normalized = normalizeText(value).replace(/\b(i am|i do|i would|myself)\b/g, '').replace(/\s+/g, ' ').trim();
-  if (/\b(decline|prefer not|wish not|dont wish|do not wish)\b/.test(normalized)) return 'decline';
+  if (/\b(decline|prefer not|wish not|dont wish|do not wish|not want to answer)\b/.test(normalized)) return 'decline';
   if (/\bno\b/.test(normalized) && /\b(consent|text message|sms)\b/.test(normalized)) return 'no consent';
   if (/^no\b/.test(normalized)) return 'no';
   if (/^yes\b/.test(normalized)) return 'yes';

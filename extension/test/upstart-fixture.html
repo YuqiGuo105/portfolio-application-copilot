@@ -66,6 +66,7 @@
           <h3>Disability Status (required)</h3>
           <button id="disability" type="button" aria-haspopup="true">Select...</button>
           <div id="disability-options" role="menu" hidden>
+            <div role="menuitemradio">I do not want to answer</div>
             <div role="menuitemradio">No, I don't have a disability</div>
             <div role="menuitemradio">I do not wish to answer</div>
           </div>
@@ -85,7 +86,9 @@
         <div data-field>
           <h3>Gender (required)</h3>
           <button id="gender" type="button" aria-haspopup="true">Select...</button>
-          <div id="gender-options" role="menu" hidden><div role="menuitemradio">Male</div></div>
+          <div id="gender-options" role="menu" hidden>
+            <div role="menuitemradio">Female</div><div role="menuitemradio">Male</div>
+          </div>
         </div>
         <button type="submit">Apply</button>
       </form>

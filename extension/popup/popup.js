@@ -19,6 +19,7 @@ let currentPage = null;
 let activeCredential = null;
 let applicationId = null;
 let activeResumeAsset = null;
+let managedResumeFile = null;
 let resumeAssetWarning = '';
 let managedResumeAttached = false;
 const signInButton = document.querySelector('#sign-in');
@@ -74,6 +75,7 @@ scanButton.addEventListener('click', async () => {
       loadActiveResumeAsset()
     ]);
     activeResumeAsset = managedResume;
+    managedResumeFile = null;
     managedResumeAttached = false;
     renderManagedResume(activeResumeAsset);
     resolutions = normalizeResolutions(payload);
@@ -99,6 +101,7 @@ scanButton.addEventListener('click', async () => {
     const resumeField = managedResumeField();
     if (activeResumeAsset && resumeField) {
       const selectedResume = await downloadManagedResume();
+      managedResumeFile = selectedResume;
       await applyResumeToActivePage(resumeField.id, selectedResume);
       managedResumeAttached = true;
       if (reviewCount) {
@@ -189,10 +192,11 @@ applyButton.addEventListener('click', async () => {
     const applied = Object.keys(approved).length ? await applyToActivePage(approved) : 0;
     if (Object.keys(approved).length && !applied) throw new Error('The page changed before values could be applied. Scan again.');
     const resumeField = managedResumeField();
-    const selectedResume = resumeField && !managedResumeAttached
-      ? localResume || (activeResumeAsset ? await downloadManagedResume() : null)
+    const selectedResume = resumeField
+      ? localResume || managedResumeFile || (activeResumeAsset ? await downloadManagedResume() : null)
       : null;
     if (selectedResume) await applyResumeToActivePage(resumeField.id, selectedResume);
+    if (selectedResume) managedResumeFile = selectedResume;
     managedResumeAttached = managedResumeAttached || Boolean(selectedResume);
     await recordCompletedFill(applied, managedResumeAttached, false);
     const action = currentPage.action?.kind === 'FINAL_SUBMIT' ? `Final action detected: “${currentPage.action.text}”.`
