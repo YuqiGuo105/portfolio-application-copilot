@@ -32,7 +32,7 @@ globalThis.__yuqiApplicationCopilot = {
           item.text.trim().toLowerCase() === String(value).trim().toLowerCase());
         if (!option) return;
         setValue(element, option.value);
-      } else setValue(element, value);
+      } else setValue(element, valueForElement(element, value));
       applied += 1;
     });
     return applied;
@@ -167,6 +167,11 @@ function setValue(element, value) {
   const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
   if (setter) setter.call(element, String(value ?? '')); else element.value = String(value ?? '');
   dispatch(element);
+}
+function valueForElement(element, value) {
+  if (detectAdapter(location.hostname) !== 'RIPPLING' || semanticKeyFor(element) !== 'phone') return value;
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
 }
 function setChecked(element, checked) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked')?.set;

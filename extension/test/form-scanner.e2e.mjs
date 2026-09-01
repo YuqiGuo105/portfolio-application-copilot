@@ -68,7 +68,16 @@ assert.deepEqual(Array.from(ripplingScan.fields, (field) => field.semanticKey), 
   'first_name', 'last_name', 'email', 'current_company', 'phone', 'linkedin_url', 'website_url'
 ]);
 assert.equal(ripplingScan.fields.filter((field) => field.required).length, 5);
+const ripplingApplied = rippling.window.__yuqiApplicationCopilot.apply({
+  'first-name': 'Yuqi',
+  'last-name': 'Guo',
+  email: 'fixture@example.test',
+  company: 'Goldman Sachs',
+  phone: '+1 (385) 237-4754'
+});
+assert.equal(ripplingApplied, 5);
+assert.equal(rippling.window.document.querySelector('#phone').value, '3852374754');
 
 console.log(JSON.stringify({ adapter: scan.adapter, fields: scan.fields.length, files: scan.files.length,
   action: scan.action.kind, applied, submitCount, submittedOutcome: submittedScan.outcome.kind,
-  ripplingAdapter: ripplingScan.adapter, ripplingFields: ripplingScan.fields.length }));
+  ripplingAdapter: ripplingScan.adapter, ripplingFields: ripplingScan.fields.length, ripplingApplied }));
