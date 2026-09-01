@@ -12,7 +12,7 @@ public record ResolveFieldsRequest(
             @NotBlank @Size(max = 4000) String label,
             @Size(max = 256) String semanticKey,
             @Size(max = 128) String type,
-            @Size(max = 200) List<@Size(max = 2000) String> options) {
+            @Size(max = 500) List<@Size(max = 2000) String> options) {
         public Field(String id, String label, String type, List<String> options) {
             this(id, label, null, type, options);
         }

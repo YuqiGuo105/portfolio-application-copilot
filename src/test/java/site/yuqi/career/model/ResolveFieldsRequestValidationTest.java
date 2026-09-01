@@ -5,6 +5,7 @@ import jakarta.validation.Validator;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -13,13 +14,16 @@ class ResolveFieldsRequestValidationTest {
 
     @Test
     void acceptsLongAtsQuestionsAndOptions() {
+        List<String> countryOptions = IntStream.range(0, 250)
+                .mapToObj(index -> "Country or region " + index)
+                .toList();
         ResolveFieldsRequest request = new ResolveFieldsRequest("upstart-application", List.of(
                 new ResolveFieldsRequest.Field(
-                        "upstart-sponsorship",
-                        "Do you need immigration support? " + "Additional legal context. ".repeat(40),
-                        "sponsorship_required",
+                        "upstart-current-location",
+                        "What is your current location? " + "Additional legal context. ".repeat(40),
+                        "country",
                         "combobox",
-                        List.of("Yes", "No", "Protected veteran definition. ".repeat(25)))));
+                        countryOptions)));
 
         assertThat(validator.validate(request)).isEmpty();
     }
