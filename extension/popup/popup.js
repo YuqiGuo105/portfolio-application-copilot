@@ -19,6 +19,7 @@ let currentPage = null;
 let activeCredential = null;
 let applicationId = null;
 let activeResumeAsset = null;
+let resumeAssetWarning = '';
 const signInButton = document.querySelector('#sign-in');
 const scanButton = document.querySelector('#scan');
 let operationRunning = false;
@@ -96,9 +97,10 @@ scanButton.addEventListener('click', async () => {
     if (email && !accountUsername.value) accountUsername.value = String(email);
     setWorkflow('review');
     const resolvedCount = resolutions.filter((item) => item.value != null).length;
-    setStatus(codexAvailable
+    const resolutionStatus = codexAvailable
       ? `${resolvedCount} value(s) ready for review. Local Codex suggestions remain unchecked.`
-      : `${resolvedCount} deterministic value(s) ready. Local Codex is unavailable; unresolved fields were left blank.`);
+      : `${resolvedCount} deterministic value(s) ready. Local Codex is unavailable; unresolved fields were left blank.`;
+    setStatus(resumeAssetWarning ? `${resolutionStatus} ${resumeAssetWarning}` : resolutionStatus, Boolean(resumeAssetWarning));
   });
 });
 
@@ -151,7 +153,10 @@ applyButton.addEventListener('click', async () => {
     setWorkflow('ready');
     const action = currentPage.action?.kind === 'FINAL_SUBMIT' ? `Final action detected: “${currentPage.action.text}”.`
       : currentPage.action?.kind === 'CONTINUE' ? `Next step detected: “${currentPage.action.text}”.` : '';
-    setStatus(`${applied} field(s) filled${selectedResume ? ' and resume attached' : ''}. ${action} Review the page; submission remains manual.`);
+    const resumeStatus = selectedResume ? ' and resume attached'
+      : currentPage.files.length ? '. Resume was not attached; choose a local PDF or restore the managed Resume Vault' : '';
+    setStatus(`${applied} field(s) filled${resumeStatus}. ${action} Review the page; submission remains manual.`,
+      Boolean(currentPage.files.length && !selectedResume));
   });
 });
 
@@ -199,10 +204,16 @@ async function applyResumeToActivePage(fieldId, file) {
 }
 
 async function loadActiveResumeAsset() {
+  resumeAssetWarning = '';
   try {
     return await callTool('career.get_active_resume_asset', {});
   } catch (error) {
-    if (/not found|no active|404/i.test(error.message || '')) return null;
+    const message = error.message || '';
+    if (/no active managed resume|no active resume/i.test(message)) return null;
+    if (/404|not found/i.test(message)) {
+      resumeAssetWarning = 'Managed Resume Vault is unavailable on the current backend revision; use a local PDF until deployment is repaired.';
+      return null;
+    }
     throw error;
   }
 }
