@@ -84,6 +84,9 @@ public class PrivateMemoryFieldRule implements ApplicationFieldRule {
             case "application source" -> Set.of("application source", "how did you hear", "referral source");
             case "previously employed by company" -> Set.of("previously employed by company",
                     "worked at company before", "employed by company before");
+            case "race" -> Set.of("race", "please identify your race");
+            case "hispanic latino", "hispanic or latino ethnicity" -> Set.of(
+                    "hispanic latino", "hispanic or latino ethnicity", "are you hispanic latino");
             default -> Set.of(label);
         };
     }

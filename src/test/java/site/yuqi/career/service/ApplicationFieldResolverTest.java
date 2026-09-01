@@ -147,6 +147,20 @@ class ApplicationFieldResolverTest {
         assertThat(result.value()).isNull();
     }
 
+    @Test void resolvesShortRaceLabelFromExplicitPrivateMemoryAlias() {
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(), List.of(), Map.of("please identify your race", "Asian"),
+                new CandidateProfile.Source("mcp", List.of("get_profile"), "fresh"));
+
+        FieldResolution result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-race", List.of(
+                        new ResolveFieldsRequest.Field("race", "Race", "race", "combobox", List.of("Asian")))))
+                .get(0);
+
+        assertThat(result.value()).isEqualTo("Asian");
+        assertThat(result.status()).isEqualTo(FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION);
+    }
+
     @Test void neverUsesProfileSummaryAsAUrlValue() {
         CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
                 List.of(), List.of(), Map.of(),
