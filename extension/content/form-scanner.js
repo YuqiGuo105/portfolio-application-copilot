@@ -8,8 +8,11 @@ globalThis.__yuqiApplicationCopilot = {
       .filter((field) => field.label);
     const files = indexedControls
       .filter(({ element }) => element.type === 'file')
-      .map(({ element, index }) => ({ id: stableId(element, index), requirementId: stableId(element, index),
-        label: labelFor(element) || 'Resume or attachment', accept: element.accept || '', required: element.required === true }));
+      .map(({ element, index }) => {
+        const label = labelFor(element) || 'Resume or attachment';
+        return { id: stableId(element, index), requirementId: stableId(element, index), label,
+          semanticKey: attachmentKeyFor(label), accept: element.accept || '', required: element.required === true };
+      });
     return { adapter: detectAdapter(location.hostname),
       pageType: classifyPage(controls), origin: location.origin, url: location.href, title: document.title,
       fields, files, action: detectPrimaryAction(), outcome: detectSubmissionOutcome() };
@@ -106,12 +109,21 @@ function semanticKeyFor(element, label = labelFor(element)) {
   if (/\b(country|country name)\b/.test(identity)) return 'country';
   return '';
 }
+function attachmentKeyFor(label) {
+  const normalized = normalizeText(label);
+  if (/\b(resume|résumé|cv|curriculum vitae)\b/.test(normalized)) return 'resume';
+  if (/\bcover letter\b/.test(normalized)) return 'cover_letter';
+  return 'attachment';
+}
 function fieldIdentity(element, label) {
   return [label, element.name, element.id, element.autocomplete, element.placeholder,
     element.getAttribute('data-testid'), element.getAttribute('data-automation-id'), element.getAttribute('aria-label')]
     .filter(Boolean).join(' ');
 }
-function normalizeText(value) { return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+function normalizeText(value) {
+  return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
 function radioOptions(element) {
   if (element.type !== 'radio' || !element.name) return [];
   return [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)]

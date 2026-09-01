@@ -6,6 +6,7 @@
     <main>
       <h1>Job application</h1>
       <form>
+        <label for="resume">Résumé</label><input id="resume" type="file" accept="application/pdf" required>
         <label for="first-name">First name</label><input id="first-name" name="firstName" autocomplete="given-name" required>
         <label for="last-name">Last name</label><input id="last-name" name="lastName" autocomplete="family-name" required>
         <label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required>
@@ -13,6 +14,7 @@
         <label for="phone">Phone number</label><input id="phone" name="phone" type="tel" autocomplete="tel" required>
         <label for="linkedin">LinkedIn Link</label><input id="linkedin" name="linkedinUrl" type="url">
         <label for="website">Website link</label><input id="website" name="websiteUrl" type="url">
+        <label for="cover-letter">Cover letter</label><input id="cover-letter" type="file" accept="application/pdf">
         <input id="company-search" role="searchbox" aria-label="Search" type="text">
         <input id="anonymous-control" aria-label="textbox" type="text">
         <select id="anonymous-select" aria-label="Select..."><option>Select...</option></select>

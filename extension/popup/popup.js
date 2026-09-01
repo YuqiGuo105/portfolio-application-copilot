@@ -100,7 +100,24 @@ scanButton.addEventListener('click', async () => {
     const resolutionStatus = codexAvailable
       ? `${resolvedCount} value(s) ready for review. Local Codex suggestions remain unchecked.`
       : `${resolvedCount} deterministic value(s) ready. Local Codex is unavailable; unresolved fields were left blank.`;
-    setStatus(resumeAssetWarning ? `${resolutionStatus} ${resumeAssetWarning}` : resolutionStatus, Boolean(resumeAssetWarning));
+    const deterministic = Object.fromEntries(resolutions
+      .filter((item) => item.status === 'RESOLVED' && item.value != null)
+      .map((item) => [item.fieldId, item.value]));
+    const autoApplied = Object.keys(deterministic).length ? await applyToActivePage(deterministic) : 0;
+    const resumeField = managedResumeField();
+    if (activeResumeAsset && resumeField) {
+      const selectedResume = await downloadManagedResume();
+      await applyResumeToActivePage(resumeField.id, selectedResume);
+      await recordCompletedFill(autoApplied, true);
+      applyButton.disabled = true;
+      applyButton.textContent = 'Safe fields applied';
+      setStatus(`${autoApplied} deterministic field(s) filled and the managed resume attached. Review the remaining fields; final submission stays manual.`);
+    } else {
+      setWorkflow('review');
+      const resumeStatus = resumeField
+        ? resumeAssetWarning || 'Choose a local PDF below, then use Apply selected to attach it.' : '';
+      setStatus(`${autoApplied} deterministic field(s) filled automatically. ${resolutionStatus} ${resumeStatus}`.trim(), Boolean(resumeAssetWarning));
+    }
   });
 });
 
@@ -140,17 +157,12 @@ applyButton.addEventListener('click', async () => {
     });
     const applied = Object.keys(approved).length ? await applyToActivePage(approved) : 0;
     if (Object.keys(approved).length && !applied) throw new Error('The page changed before values could be applied. Scan again.');
-    const selectedResume = currentPage.files.length
+    const resumeField = managedResumeField();
+    const selectedResume = resumeField
       ? localResume || (activeResumeAsset ? await downloadManagedResume() : null)
       : null;
-    if (selectedResume) await applyResumeToActivePage(currentPage.files[0].id, selectedResume);
-    await callTool('career.record_application_fill', {
-      applicationId,
-      appliedFields: applied,
-      resumeAttached: Boolean(selectedResume),
-      detectedAction: currentPage.action?.kind || 'NONE'
-    });
-    setWorkflow('ready');
+    if (selectedResume) await applyResumeToActivePage(resumeField.id, selectedResume);
+    await recordCompletedFill(applied, Boolean(selectedResume), false);
     const action = currentPage.action?.kind === 'FINAL_SUBMIT' ? `Final action detected: “${currentPage.action.text}”.`
       : currentPage.action?.kind === 'CONTINUE' ? `Next step detected: “${currentPage.action.text}”.` : '';
     const resumeStatus = selectedResume ? ' and resume attached'
@@ -230,6 +242,24 @@ async function downloadManagedResume() {
     throw new Error('Managed resume integrity verification failed.');
   }
   return new File([bytes], ticket.fileName, { type: ticket.mimeType || 'application/pdf' });
+}
+
+function managedResumeField() {
+  if (!currentPage?.files?.length) return null;
+  return currentPage.files.find((field) => field.semanticKey === 'resume') || currentPage.files[0];
+}
+
+async function recordCompletedFill(applied, resumeAttached, recordReview = true) {
+  if (recordReview) {
+    await callTool('career.record_application_review', { applicationId, approvedFields: applied });
+  }
+  await callTool('career.record_application_fill', {
+    applicationId,
+    appliedFields: applied,
+    resumeAttached,
+    detectedAction: currentPage.action?.kind || 'NONE'
+  });
+  setWorkflow('ready');
 }
 
 async function sha256Hex(bytes) {

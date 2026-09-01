@@ -26,6 +26,7 @@ assert.equal(scan.outcome.kind, 'NONE');
 assert.equal(scan.fields.length, 4);
 assert.equal(scan.files.length, 1);
 assert.equal(scan.files[0].id, 'resume');
+assert.equal(scan.files[0].semanticKey, 'resume');
 
 let submitCount = 0;
 dom.window.document.querySelector('form').addEventListener('submit', (event) => {
@@ -64,6 +65,8 @@ const ripplingScan = rippling.window.__yuqiApplicationCopilot.scan();
 assert.equal(ripplingScan.adapter, 'RIPPLING');
 assert.equal(ripplingScan.pageType, 'APPLICATION');
 assert.equal(ripplingScan.fields.length, 7, 'Search and anonymous controls must not enter the application workflow.');
+assert.equal(ripplingScan.files.length, 2);
+assert.deepEqual(Array.from(ripplingScan.files, (field) => field.semanticKey), ['resume', 'cover_letter']);
 assert.deepEqual(Array.from(ripplingScan.fields, (field) => field.semanticKey), [
   'first_name', 'last_name', 'email', 'current_company', 'phone', 'linkedin_url', 'website_url'
 ]);
