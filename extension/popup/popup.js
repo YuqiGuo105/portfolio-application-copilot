@@ -102,7 +102,7 @@ scanButton.addEventListener('click', async () => {
     if (activeResumeAsset && resumeField) {
       const selectedResume = await downloadManagedResume();
       managedResumeFile = selectedResume;
-      await applyResumeToActivePage(resumeField.id, selectedResume);
+      await applyResumeToActivePage(resumeField, selectedResume);
       managedResumeAttached = true;
       if (reviewCount) {
         setWorkflow('review');
@@ -195,7 +195,7 @@ applyButton.addEventListener('click', async () => {
     const selectedResume = resumeField
       ? localResume || managedResumeFile || (activeResumeAsset ? await downloadManagedResume() : null)
       : null;
-    if (selectedResume) await applyResumeToActivePage(resumeField.id, selectedResume);
+    if (selectedResume) await applyResumeToActivePage(resumeField, selectedResume);
     if (selectedResume) managedResumeFile = selectedResume;
     managedResumeAttached = managedResumeAttached || Boolean(selectedResume);
     await recordCompletedFill(applied, managedResumeAttached, false);
@@ -245,15 +245,29 @@ async function applyToActivePage(values) {
   return result || 0;
 }
 
-async function applyResumeToActivePage(fieldId, file) {
+async function applyResumeToActivePage(field, file) {
   if (file.size > 10 * 1024 * 1024) throw new Error('Resume files must be 10 MB or smaller.');
   const tab = await activeTab();
   const payload = { name: file.name, type: file.type || 'application/pdf', dataUrl: await readAsDataUrl(file) };
-  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [fieldId, payload],
-    func: async (id, value) => globalThis.__yuqiApplicationCopilot?.applyFile(id, value) });
-  if (!result?.name) throw new Error('The ATS did not accept the selected resume.');
-  return result;
+  const reference = { id: field.id, label: field.label || '', semanticKey: field.semanticKey || 'resume' };
+  let result = null;
+  for (const delay of [0, 400, 900, 1800]) {
+    if (delay) await wait(delay);
+    const [{ result: statusResult }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [reference],
+      func: (value) => globalThis.__yuqiApplicationCopilot?.fileStatus(value) });
+    if (statusResult?.name === file.name) { result = statusResult; continue; }
+    const [{ result: applyResult }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [reference, payload],
+      func: async (value, attachment) => globalThis.__yuqiApplicationCopilot?.applyFile(value, attachment) });
+    result = applyResult;
+  }
+  await wait(400);
+  const [{ result: verified }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [reference],
+    func: (value) => globalThis.__yuqiApplicationCopilot?.fileStatus(value) });
+  if (verified?.name !== file.name) throw new Error('The ATS cleared the resume after rendering. Try attaching it again.');
+  return verified || result;
 }
+
+function wait(milliseconds) { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
 
 async function loadActiveResumeAsset() {
   resumeAssetWarning = '';

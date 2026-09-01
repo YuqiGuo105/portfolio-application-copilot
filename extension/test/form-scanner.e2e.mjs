@@ -114,6 +114,10 @@ const attachedResume = await rippling.window.__yuqiApplicationCopilot.applyFile(
 });
 assert.equal(attachedResume.name, 'Yuqi_Guo_Resume_SDE2.pdf');
 assert.equal(hiddenResumeInput.files[0].name, 'Yuqi_Guo_Resume_SDE2.pdf');
+assert.equal(rippling.window.__yuqiApplicationCopilot.fileStatus({ semanticKey: 'resume' }).name,
+  'Yuqi_Guo_Resume_SDE2.pdf');
+assert.equal(rippling.window.__yuqiApplicationCopilot.scan().files[0].selectedName,
+  'Yuqi_Guo_Resume_SDE2.pdf');
 assert.deepEqual(Array.from(ripplingScan.fields, (field) => field.semanticKey), [
   'first_name', 'last_name', 'email', 'current_company', 'phone', 'linkedin_url', 'website_url', '',
   '', '', '', ''

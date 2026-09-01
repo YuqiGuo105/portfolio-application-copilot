@@ -8,7 +8,8 @@ globalThis.__yuqiApplicationCopilot = {
       .map(({ element, index }) => {
         const label = labelFor(element) || 'Resume or attachment';
         return { id: stableId(element, index), requirementId: stableId(element, index), label,
-          semanticKey: attachmentKeyFor(label), accept: element.accept || '', required: element.required === true };
+          semanticKey: attachmentKeyFor(label), accept: element.accept || '', required: element.required === true,
+          selectedName: element.files?.[0]?.name || '' };
       });
     return { adapter: detectAdapter(location.hostname),
       pageType: classifyPage(controls), origin: location.origin, url: location.href, title: document.title,
@@ -47,9 +48,9 @@ globalThis.__yuqiApplicationCopilot = {
     }
     return applied;
   },
-  async applyFile(fieldId, payload) {
+  async applyFile(fieldReference, payload) {
     const controls = formControls();
-    const input = controls.find((element, index) => stableId(element, index) === fieldId);
+    const input = findAttachmentInput(controls, fieldReference);
     if (!input || input.type !== 'file') throw new Error('The resume upload field is no longer available.');
     if (!payload?.dataUrl || !payload?.name) throw new Error('The selected resume is invalid.');
     const blob = await fetch(payload.dataUrl).then((response) => response.blob());
@@ -58,7 +59,13 @@ globalThis.__yuqiApplicationCopilot = {
     transfer.items.add(file);
     input.files = transfer.files;
     dispatch(input);
-    return { fieldId, name: file.name, size: file.size };
+    return { fieldId: stableId(input, controls.indexOf(input)), name: input.files?.[0]?.name || '', size: file.size };
+  },
+  fileStatus(fieldReference) {
+    const controls = formControls();
+    const input = findAttachmentInput(controls, fieldReference);
+    return input ? { found: true, fieldId: stableId(input, controls.indexOf(input)),
+      name: input.files?.[0]?.name || '', size: input.files?.[0]?.size || 0 } : { found: false, name: '', size: 0 };
   },
   applyCredentials(credential) {
     const controls = [...document.querySelectorAll('input')].filter(isVisible);
@@ -113,6 +120,15 @@ function nearestInteractiveControl(element) {
 }
 function isUsableFileInput(element) {
   return element.type === 'file' && !element.disabled;
+}
+function findAttachmentInput(controls, reference) {
+  const requested = typeof reference === 'string' ? { id: reference } : reference || {};
+  const files = controls.map((element, index) => ({ element, index }))
+    .filter(({ element }) => isUsableFileInput(element));
+  return files.find(({ element, index }) => stableId(element, index) === requested.id)?.element ||
+    files.find(({ element }) => requested.semanticKey && attachmentKeyFor(labelFor(element)) === requested.semanticKey)?.element ||
+    files.find(({ element }) => requested.label && normalizeText(labelFor(element)) === normalizeText(requested.label))?.element ||
+    (files.length === 1 ? files[0].element : null);
 }
 function describeApplicationFields(indexedControls) {
   const fields = [];
