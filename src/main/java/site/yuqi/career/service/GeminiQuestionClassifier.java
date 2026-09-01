@@ -34,7 +34,8 @@ public class GeminiQuestionClassifier {
             result per field. semanticKey must be concise snake_case that preserves the question's actual meaning.
             For common questions, use these exact canonical keys when applicable: first_name, last_name, email,
             phone, current_company, location, linkedin_url, website_url, gender, race, hispanic_latino,
-            veteran_status, disability_status, sms_consent. Use a natural snake_case normalization only for an
+            veteran_status, disability_status, sms_consent, work_location_preference, sponsorship_required,
+            company_familiarity, application_source, previously_employed_by_company. Use a natural snake_case normalization only for an
             unfamiliar question. Do not answer the question and do not infer candidate facts. Use CLASSIFIED only
             when meaning is clear.
             Categories: CONTACT, EXPERIENCE, EDUCATION, IMMIGRATION, EEO, COMPENSATION, CONSENT, LEGAL, OTHER.

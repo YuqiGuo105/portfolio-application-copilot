@@ -28,7 +28,11 @@ globalThis.__yuqiApplicationCopilot = {
       if (isCustomCombobox(element)) {
         if (!await chooseCustomOption(element, value)) continue;
       } else if (element.type === 'checkbox') {
-        setChecked(element, value === true || ['true', 'yes', '1'].includes(String(value).toLowerCase()));
+        if (isGroupedCheckbox(element)) {
+          if (!applyCheckboxGroup(element, value)) continue;
+        } else {
+          setChecked(element, value === true || ['true', 'yes', '1'].includes(String(value).toLowerCase()));
+        }
       } else if (element.type === 'radio') {
         const radio = findRadioOption(element, value);
         if (!radio) continue;
@@ -68,12 +72,29 @@ globalThis.__yuqiApplicationCopilot = {
 };
 
 function formControls() {
-  const declared = [...document.querySelectorAll('input, select, textarea, button, [role="combobox"], [aria-controls], [aria-haspopup], [aria-autocomplete], [tabindex], [contenteditable="true"]')];
-  return [...declared, ...customPromptControls()]
+  const scope = applicationScope();
+  const declared = [...scope.querySelectorAll('input, select, textarea, button, [role="combobox"], [aria-controls], [aria-haspopup], [aria-autocomplete], [tabindex], [contenteditable="true"]')];
+  return [...declared, ...customPromptControls(scope)]
     .filter((element, index, controls) => controls.indexOf(element) === index);
 }
-function customPromptControls() {
-  return [...document.querySelectorAll('div, span')]
+function applicationScope() {
+  const forms = [...document.querySelectorAll('form')];
+  if (!forms.length) return document;
+  const ranked = forms.map((form) => {
+    const text = normalizeText(form.innerText || form.textContent).slice(0, 4000);
+    const fileInputs = form.querySelectorAll('input[type="file"]').length;
+    const controls = form.querySelectorAll('input, select, textarea, [role="combobox"], [aria-haspopup]').length;
+    const submitText = [...form.querySelectorAll('button, input[type="submit"]')]
+      .map((element) => normalizeText(element.innerText || element.textContent || element.value)).join(' ');
+    const applicationSignals = Number(/resume|curriculum vitae|cover letter/.test(text)) * 40 +
+      Number(/apply|submit application|send application/.test(submitText)) * 30;
+    const alertPenalty = /job alert|create alert|sign up for alerts/.test(text) ? 60 : 0;
+    return { form, score: fileInputs * 100 + applicationSignals + Math.min(controls, 30) - alertPenalty };
+  }).sort((left, right) => right.score - left.score);
+  return ranked[0]?.score > 20 ? ranked[0].form : document;
+}
+function customPromptControls(scope = document) {
+  return [...scope.querySelectorAll('div, span')]
     .filter((element) => {
       const prompt = normalizeText(element.innerText || element.textContent);
       return /^(select|choose)( |\.|$)/.test(prompt) &&
@@ -96,6 +117,7 @@ function isUsableFileInput(element) {
 function describeApplicationFields(indexedControls) {
   const fields = [];
   const radioGroups = new Set();
+  const checkboxGroups = new Set();
   indexedControls.forEach(({ element, index }) => {
     if (!isApplicationControl(element)) return;
     if (element.type === 'radio' && element.name) {
@@ -106,6 +128,17 @@ function describeApplicationFields(indexedControls) {
       if (label) fields.push(describeField(element, index, { id, label }));
       return;
     }
+    if (element.type === 'checkbox' && isGroupedCheckbox(element)) {
+      const id = checkboxGroupId(element);
+      if (checkboxGroups.has(id)) return;
+      checkboxGroups.add(id);
+      const label = checkboxGroupLabel(element);
+      if (label) fields.push(describeField(element, index, {
+        id, label, type: 'checkbox-group', options: checkboxOptions(element),
+        required: groupRequired(element, label)
+      }));
+      return;
+    }
     const field = describeField(element, index);
     if (field.label) fields.push(field);
   });
@@ -114,7 +147,8 @@ function describeApplicationFields(indexedControls) {
 function findControl(controls, instruction, used) {
   const indexed = controls.map((element, index) => ({ element, index })).filter(({ element }) => !used.has(element));
   const exact = indexed.find(({ element, index }) => stableId(element, index) === instruction.id ||
-    (element.type === 'radio' && radioGroupId(element) === instruction.id));
+    (element.type === 'radio' && radioGroupId(element) === instruction.id) ||
+    (element.type === 'checkbox' && isGroupedCheckbox(element) && checkboxGroupId(element) === instruction.id));
   if (exact) return exact;
   if (instruction.semanticKey) {
     const semantic = indexed.filter(({ element }) => semanticKeyFor(element) === instruction.semanticKey);
@@ -130,10 +164,10 @@ function describeField(element, index, override = {}) {
   const id = override.id || stableId(element, index);
   const label = override.label || labelFor(element);
   return { id, requirementId: element.type === 'radio' && element.name ? radioGroupId(element) : id,
-    label, semanticKey: semanticKeyFor(element, label), type: isCustomCombobox(element) ? 'combobox' : element.type || element.tagName.toLowerCase(),
-    autocomplete: element.autocomplete || '', required: element.required === true || element.getAttribute('aria-required') === 'true',
-    options: element.tagName === 'SELECT' ? [...element.options].map(optionText).filter(Boolean) :
-      element.type === 'radio' ? radioOptions(element) : customOptions(element) };
+    label, semanticKey: semanticKeyFor(element, label), type: override.type || (isCustomCombobox(element) ? 'combobox' : element.type || element.tagName.toLowerCase()),
+    autocomplete: element.autocomplete || '', required: override.required ?? (element.required === true || element.getAttribute('aria-required') === 'true'),
+    options: override.options || (element.tagName === 'SELECT' ? [...element.options].map(optionText).filter(Boolean) :
+      element.type === 'radio' ? radioOptions(element) : customOptions(element)) };
 }
 function detectAdapter(hostname) {
   const host = String(hostname || '').toLowerCase();
@@ -222,8 +256,66 @@ function findRadioOption(element, value) {
     ? [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)] : [element];
   return radios.find((radio) => choiceMatches(radio.value, value) || choiceMatches(labelFor(radio), value));
 }
+function isGroupedCheckbox(element) { return checkboxGroupElements(element).length > 1; }
+function checkboxGroupId(element) {
+  const group = checkboxGroupContainer(element);
+  if (element.name && checkboxGroupElements(element).every((item) => item.name === element.name)) {
+    return `checkbox:${element.name}`;
+  }
+  return `checkbox:${group?.id || normalizeText(checkboxGroupLabel(element)) || stableId(element, 0)}`;
+}
+function checkboxGroupContainer(element) {
+  let candidate = element.closest('fieldset, [role="group"], [data-field], .field, .form-field');
+  if (candidate && candidate.querySelectorAll('input[type="checkbox"]').length > 1) return candidate;
+  candidate = element.parentElement;
+  for (let depth = 0; candidate && depth < 6; depth += 1, candidate = candidate.parentElement) {
+    const boxes = candidate.querySelectorAll('input[type="checkbox"]');
+    if (boxes.length > 1 && boxes.length <= 20) return candidate;
+  }
+  return element.parentElement;
+}
+function checkboxGroupElements(element) {
+  if (element.name) {
+    const named = [...document.querySelectorAll(`input[type="checkbox"][name="${CSS.escape(element.name)}"]`)];
+    if (named.length > 1) return named;
+  }
+  return [...(checkboxGroupContainer(element)?.querySelectorAll('input[type="checkbox"]') || [])];
+}
+function checkboxOptions(element) {
+  return checkboxGroupElements(element).map((option) => labelFor(option) || option.value).filter(Boolean);
+}
+function checkboxGroupLabel(element) {
+  const group = checkboxGroupContainer(element);
+  const explicit = group?.querySelector(':scope > legend, :scope > label, :scope > [data-label], :scope > h2, :scope > h3, :scope > h4');
+  return cleanLabel(explicit?.textContent || labelledByText(group) || contextualLabel(group) || checkboxQuestion(element));
+}
+function checkboxQuestion(element) {
+  const group = checkboxGroupContainer(element);
+  let sibling = group?.previousElementSibling;
+  while (sibling) {
+    const text = (sibling.innerText || sibling.textContent || '').replace(/\s+/g, ' ').trim();
+    if (text && text.length <= 600 && !sibling.querySelector('input, select, textarea, [role="combobox"]')) return text;
+    sibling = sibling.previousElementSibling;
+  }
+  return '';
+}
+function groupRequired(element, label) {
+  const group = checkboxGroupContainer(element);
+  return /\brequired\b/i.test(label) || group?.getAttribute('aria-required') === 'true' ||
+    checkboxGroupElements(element).some((option) => option.required || option.getAttribute('aria-required') === 'true');
+}
+function applyCheckboxGroup(element, value) {
+  const requested = Array.isArray(value) ? value : String(value ?? '').split(/[,;|]/).map((item) => item.trim());
+  const selected = checkboxGroupElements(element).filter((option) => requested.some((item) =>
+    choiceMatches(option.value, item) || choiceMatches(labelFor(option), item)));
+  if (!selected.length) return false;
+  checkboxGroupElements(element).forEach((option) => setChecked(option, selected.includes(option)));
+  return true;
+}
 function isCustomCombobox(element) {
   if (element.getAttribute('role') === 'combobox' || element.getAttribute('aria-haspopup') === 'listbox') return true;
+  const popup = element.getAttribute('aria-haspopup');
+  if (popup && popup !== 'false' && contextualLabel(element)) return true;
   if (element.getAttribute('aria-autocomplete') === 'list') return true;
   const controlled = (element.getAttribute('aria-controls') || '').split(/\s+/).filter(Boolean)
     .map((id) => document.getElementById(id));
@@ -253,8 +345,11 @@ async function chooseCustomOption(element, value) {
 async function waitForOptions(element) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const linked = linkedOptions(element).filter(isVisible);
-    const visible = [...document.querySelectorAll('[role="listbox"]')].filter(isVisible).flatMap(optionElements);
-    const options = linked.length ? linked : visible;
+    const visible = [...document.querySelectorAll('[role="listbox"], [role="menu"], [role="dialog"]')]
+      .filter(isVisible).flatMap(optionElements);
+    const loose = [...document.querySelectorAll('[role="option"], [role="menuitemradio"], [data-value], .oj-listbox-result')]
+      .filter(isVisible);
+    const options = linked.length ? linked : visible.length ? visible : loose;
     if (options.length) return options;
     await new Promise((resolve) => setTimeout(resolve, 75));
   }
@@ -262,7 +357,7 @@ async function waitForOptions(element) {
 }
 function optionElements(container) {
   if (!container) return [];
-  const explicit = [...container.querySelectorAll('[role="option"], [role="menuitemradio"], option')];
+  const explicit = [...container.querySelectorAll('[role="option"], [role="menuitemradio"], option, [data-value], .oj-listbox-result')];
   if (explicit.length) return explicit;
   return [...container.querySelectorAll('*')].filter((candidate) => {
     const text = optionText(candidate);
@@ -311,7 +406,7 @@ function classifyPage(controls) {
   const usesNewPassword = passwords.some((element) => element.autocomplete === 'new-password');
   if (passwords.length >= 2 || (passwords.length >= 1 && (usesNewPassword || /\b(create account|sign up|register|confirm password)\b/.test(text)))) return 'SIGN_UP';
   if (passwords.length >= 1) return 'SIGN_IN';
-  if (/\b(job application|apply now|submit application|candidate|personal information)\b/.test(text)) return 'APPLICATION';
+  if (/\b(job application|apply now|ready to apply|submit application|candidate|personal information)\b/.test(text)) return 'APPLICATION';
   return 'FORM';
 }
 function stableId(element, index) {

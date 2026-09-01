@@ -32,7 +32,8 @@ final class CodexFieldAdvisor {
             stable snake_case semanticKey describing the question's meaning. For common questions, use these exact
             canonical keys when applicable: first_name, last_name, email, phone, current_company, location,
             linkedin_url, website_url, gender, race, hispanic_latino, veteran_status, disability_status,
-            sms_consent. Use a natural snake_case normalization only for unfamiliar questions. Do not answer any
+            sms_consent, work_location_preference, sponsorship_required, company_familiarity,
+            application_source, previously_employed_by_company. Use a natural snake_case normalization only for unfamiliar questions. Do not answer any
             question and do not infer candidate data.
             Mark a field UNRESOLVED only when its meaning is genuinely ambiguous. Use category EEO for demographic,
             veteran, or disability questions; IMMIGRATION for authorization, sponsorship, visa, or I-140 questions;

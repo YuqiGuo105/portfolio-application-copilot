@@ -102,4 +102,44 @@ class ApplicationFieldResolverTest {
         assertThat(result).extracting(FieldResolution::value).containsExactly("Male", "Asian", "No");
         assertThat(result).allMatch(field -> field.status() == FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION);
     }
+
+    @Test void resolvesUpstartCanonicalQuestionsFromAliasesAndOriginalLabels() {
+        String familiarityQuestion = "Before applying, how familiar were you with Upstart?";
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(), List.of(), Map.of(
+                        "location preference", "Remote",
+                        "visa sponsorship", "Yes",
+                        familiarityQuestion, "I was already familiar with Upstart",
+                        "how did you hear", "LinkedIn company page",
+                        "employed by company before", "No"),
+                new CandidateProfile.Source("mcp", List.of("get_profile"), "fresh"));
+
+        List<FieldResolution> result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-upstart", List.of(
+                        new ResolveFieldsRequest.Field("locations", "Location Preference", "work_location_preference", "checkbox-group", List.of("Remote")),
+                        new ResolveFieldsRequest.Field("sponsor", "Do you need immigration-related support or sponsorship?", "sponsorship_required", "combobox", List.of("Yes", "No")),
+                        new ResolveFieldsRequest.Field("familiar", familiarityQuestion, "company_familiarity", "combobox", List.of()),
+                        new ResolveFieldsRequest.Field("source", "Before applying, how did you hear about Upstart?", "application_source", "combobox", List.of()),
+                        new ResolveFieldsRequest.Field("former", "Have you been employed by Upstart before?", "previously_employed_by_company", "combobox", List.of("Yes", "No")))));
+
+        assertThat(result).extracting(FieldResolution::value).containsExactly(
+                "Remote", "Yes", "I was already familiar with Upstart", "LinkedIn company page", "No");
+        assertThat(result.get(1).status()).isEqualTo(FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION);
+        assertThat(result).filteredOn(field -> !field.fieldId().equals("sponsor"))
+                .allMatch(field -> field.status() == FieldResolution.ResolutionStatus.RESOLVED);
+    }
+
+    @Test void neverUsesProfileSummaryAsAUrlValue() {
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(), List.of(), Map.of(),
+                new CandidateProfile.Source("mcp", List.of("get_profile"), "fresh"));
+
+        FieldResolution result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-url", List.of(
+                        new ResolveFieldsRequest.Field("linkedin", "LinkedIn Profile", "profile", "url", List.of()))))
+                .get(0);
+
+        assertThat(result.status()).isEqualTo(FieldResolution.ResolutionStatus.UNSUPPORTED);
+        assertThat(result.value()).isNull();
+    }
 }

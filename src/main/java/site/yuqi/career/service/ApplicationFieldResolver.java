@@ -29,11 +29,12 @@ public class ApplicationFieldResolver {
         CandidateProfile profile = profiles.get(); return request.fields().stream().map(field -> resolve(field, profile)).toList();
     }
     private FieldResolution resolve(ResolveFieldsRequest.Field field, CandidateProfile profile) {
-        String sourceLabel = field.semanticKey() == null || field.semanticKey().isBlank()
+        String semanticLabel = field.semanticKey() == null || field.semanticKey().isBlank()
                 ? field.label() : field.semanticKey();
-        String label = policy.normalize(sourceLabel);
+        String label = policy.normalize(semanticLabel);
+        String visibleLabel = policy.normalize(field.label());
         FieldResolutionContext context = new FieldResolutionContext(field, profile, label,
-                policy.requiresConfirmation(label));
+                policy.requiresConfirmation(label + " " + visibleLabel));
         for (ApplicationFieldRule rule : rules) {
             Optional<FieldResolution> result = rule.resolve(context);
             if (result.isPresent()) return result.get();

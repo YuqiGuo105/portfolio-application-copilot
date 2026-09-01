@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 
 const fixture = await readFile(new URL('./workable-fixture.html', import.meta.url), 'utf8');
 const ripplingFixture = await readFile(new URL('./rippling-fixture.html', import.meta.url), 'utf8');
+const upstartFixture = await readFile(new URL('./upstart-fixture.html', import.meta.url), 'utf8');
 const scanner = await readFile(new URL('../content/form-scanner.js', import.meta.url), 'utf8');
 const html = fixture.replace(/<script src="\.\.\/content\/form-scanner\.js"><\/script>/, '');
 const dom = new JSDOM(html, {
@@ -160,6 +161,55 @@ const rebound = await rippling.window.__yuqiApplicationCopilot.apply([{
 assert.equal(rebound, 1, 'Semantic matching must survive an ATS rerender that changes the field id.');
 assert.equal(firstNameInput.value, 'Yuqi');
 
+const upstart = new JSDOM(upstartFixture, {
+  url: 'https://careers.upstart.com/jobs/software-engineer-upstart-bank-fixture',
+  runScripts: 'outside-only'
+});
+upstart.window.CSS = dom.window.CSS;
+for (const element of upstart.window.document.querySelectorAll('*')) {
+  element.getClientRects = () => [{ width: 100, height: 30 }];
+}
+upstart.window.eval(scanner);
+for (const control of upstart.window.document.querySelectorAll('#application button[aria-haspopup]')) {
+  const options = upstart.window.document.querySelector(`#${control.id}-options`);
+  control.addEventListener('click', () => { options.hidden = false; });
+  options.querySelectorAll('[role="menuitemradio"]').forEach((option) => {
+    option.addEventListener('click', () => {
+      control.dataset.selected = option.textContent.trim();
+      options.hidden = true;
+    });
+  });
+}
+const upstartScan = upstart.window.__yuqiApplicationCopilot.scan();
+assert.equal(upstartScan.adapter, 'GENERIC');
+assert.equal(upstartScan.pageType, 'APPLICATION');
+assert.equal(upstartScan.files.length, 1);
+assert.equal(upstartScan.fields.filter((field) => field.semanticKey === 'first_name').length, 1,
+  'Job-alert controls must stay outside the application workflow.');
+const locationPreference = upstartScan.fields.find((field) => field.type === 'checkbox-group');
+assert.equal(locationPreference.label, 'Location Preference (required)');
+assert.deepEqual(Array.from(locationPreference.options), ['San Mateo, CA', 'Columbus, OH', 'Austin, TX', 'Remote']);
+assert.equal(locationPreference.required, true);
+for (const id of ['current-location', 'sponsorship', 'familiarity', 'source', 'previous-employment',
+  'disability', 'veteran', 'race', 'gender']) {
+  assert.equal(upstartScan.fields.find((field) => field.id === id)?.type, 'combobox', `${id} must be scanned.`);
+}
+const upstartApplied = await upstart.window.__yuqiApplicationCopilot.apply([
+  { id: locationPreference.id, label: locationPreference.label, value: 'Remote' },
+  { id: 'sponsorship', label: 'Do you need immigration-related support or sponsorship?', value: 'Yes' },
+  { id: 'disability', label: 'Disability Status', value: "No, I don't have a disability" },
+  { id: 'veteran', label: 'Veteran Status', value: 'I am not a protected veteran' },
+  { id: 'race', label: 'Race', value: 'Asian' },
+  { id: 'gender', label: 'Gender', value: 'Male' }
+]);
+assert.equal(upstartApplied, 6);
+assert.equal(upstart.window.document.querySelector('input[value="Remote"]').checked, true);
+assert.equal(upstart.window.document.querySelector('input[value="Austin, TX"]').checked, false);
+assert.equal(upstart.window.document.querySelector('#disability').dataset.selected, "No, I don't have a disability");
+assert.equal(upstart.window.document.querySelector('#race').dataset.selected, 'Asian');
+assert.equal(upstart.window.document.querySelector('#gender').dataset.selected, 'Male');
+
 console.log(JSON.stringify({ adapter: scan.adapter, fields: scan.fields.length, files: scan.files.length,
   action: scan.action.kind, applied, submitCount, submittedOutcome: submittedScan.outcome.kind,
-  ripplingAdapter: ripplingScan.adapter, ripplingFields: ripplingScan.fields.length, ripplingApplied }));
+  ripplingAdapter: ripplingScan.adapter, ripplingFields: ripplingScan.fields.length, ripplingApplied,
+  upstartFields: upstartScan.fields.length, upstartApplied }));

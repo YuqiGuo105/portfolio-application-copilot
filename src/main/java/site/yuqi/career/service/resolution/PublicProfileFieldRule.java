@@ -17,7 +17,9 @@ public class PublicProfileFieldRule implements ApplicationFieldRule {
             return Optional.of(result(context, String.join(", ", context.profile().skills()), .92,
                     "Derived from first-party project and experience records."));
         }
-        if (label.contains("summary") || label.contains("about") || label.contains("profile")) {
+        boolean urlField = "url".equalsIgnoreCase(context.field().type()) || label.contains("linkedin") ||
+                label.contains("website");
+        if (!urlField && (label.contains("summary") || label.contains("about") || label.contains("profile"))) {
             return Optional.of(result(context, context.profile().summary(), .94,
                     "Current cached candidate summary."));
         }

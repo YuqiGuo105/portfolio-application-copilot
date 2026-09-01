@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <head><title>Software Engineer, Upstart Bank</title></head>
+  <body>
+    <form id="job-alert">
+      <h2>Sign up for job alerts!</h2>
+      <label>First Name <input name="alertFirstName"></label>
+      <label>Last Name <input name="alertLastName"></label>
+      <label>Categories <button type="button" aria-haspopup="true">Engineering Department</button></label>
+      <button type="submit">Submit</button>
+    </form>
+    <section>
+      <h2>Ready to Apply?</h2>
+      <form id="application">
+        <label>First Name <input name="firstName" autocomplete="given-name" required></label>
+        <label>Last Name <input name="lastName" autocomplete="family-name" required></label>
+        <label>Phone Number <input name="phone" type="tel" required></label>
+        <label>Email <input name="email" type="email" required></label>
+        <label>Resume <input id="resume" type="file" accept="application/pdf" required hidden></label>
+        <div data-field>
+          <h3>What is your current location? (required)</h3>
+          <button id="current-location" type="button" aria-haspopup="true">Select...</button>
+          <div id="current-location-options" role="menu" hidden>
+            <div role="menuitemradio">United States</div>
+          </div>
+        </div>
+        <fieldset id="location-preference" aria-required="true">
+          <legend>Location Preference (required)</legend>
+          <p>Select the location where you will spend more than 50% of your time.</p>
+          <label><input type="checkbox" name="locations" value="San Mateo, CA">San Mateo, CA</label>
+          <label><input type="checkbox" name="locations" value="Columbus, OH">Columbus, OH</label>
+          <label><input type="checkbox" name="locations" value="Austin, TX">Austin, TX</label>
+          <label><input type="checkbox" name="locations" value="Remote">Remote</label>
+        </fieldset>
+        <div data-field>
+          <h3>Do you need immigration-related support or sponsorship? (required)</h3>
+          <button id="sponsorship" type="button" aria-haspopup="true">Select...</button>
+          <div id="sponsorship-options" role="menu" hidden>
+            <div role="menuitemradio">Yes</div><div role="menuitemradio">No</div>
+          </div>
+        </div>
+        <div data-field>
+          <h3>Before applying, how familiar were you with Upstart? (required)</h3>
+          <button id="familiarity" type="button" aria-haspopup="true">Select...</button>
+          <div id="familiarity-options" role="menu" hidden>
+            <div role="menuitemradio">I was already familiar with Upstart</div>
+          </div>
+        </div>
+        <div data-field>
+          <h3>Before applying, how did you hear about Upstart? (required)</h3>
+          <button id="source" type="button" aria-haspopup="true">Select...</button>
+          <div id="source-options" role="menu" hidden>
+            <div role="menuitemradio">LinkedIn company page</div>
+          </div>
+        </div>
+        <div data-field>
+          <h3>Have you been employed by Upstart before? (required)</h3>
+          <button id="previous-employment" type="button" aria-haspopup="true">Select...</button>
+          <div id="previous-employment-options" role="menu" hidden>
+            <div role="menuitemradio">Yes</div><div role="menuitemradio">No</div>
+          </div>
+        </div>
+        <label>LinkedIn Profile <input name="linkedin" type="url"></label>
+        <label>Website <input name="website" type="url"></label>
+        <div data-field>
+          <h3>Disability Status (required)</h3>
+          <button id="disability" type="button" aria-haspopup="true">Select...</button>
+          <div id="disability-options" role="menu" hidden>
+            <div role="menuitemradio">No, I don't have a disability</div>
+            <div role="menuitemradio">I do not wish to answer</div>
+          </div>
+        </div>
+        <div data-field>
+          <h3>Veteran Status (required)</h3>
+          <button id="veteran" type="button" aria-haspopup="true">Select...</button>
+          <div id="veteran-options" role="menu" hidden>
+            <div role="menuitemradio">I am not a protected veteran</div>
+          </div>
+        </div>
+        <div data-field>
+          <h3>Race (required)</h3>
+          <button id="race" type="button" aria-haspopup="true">Select...</button>
+          <div id="race-options" role="menu" hidden><div role="menuitemradio">Asian</div></div>
+        </div>
+        <div data-field>
+          <h3>Gender (required)</h3>
+          <button id="gender" type="button" aria-haspopup="true">Select...</button>
+          <div id="gender-options" role="menu" hidden><div role="menuitemradio">Male</div></div>
+        </div>
+        <button type="submit">Apply</button>
+      </form>
+    </section>
+  </body>
+</html>

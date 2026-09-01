@@ -24,6 +24,9 @@ public class PrivateMemoryFieldRule implements ApplicationFieldRule {
     @Override
     public Optional<FieldResolution> resolve(FieldResolutionContext context) {
         Object value = find(context.normalizedLabel(), context.profile().applicationPreferences());
+        if (value == null) {
+            value = find(policy.normalize(context.field().label()), context.profile().applicationPreferences());
+        }
         if (value == null) return Optional.empty();
         FieldResolution.ResolutionStatus status = context.sensitive()
                 ? FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION
@@ -73,6 +76,14 @@ public class PrivateMemoryFieldRule implements ApplicationFieldRule {
             case "current company" -> Set.of("current company", "current employer", "company", "employer");
             case "linkedin url" -> Set.of("linkedin url", "linkedin link", "linkedin");
             case "website url" -> Set.of("website url", "website link", "website", "portfolio url");
+            case "work location preference" -> Set.of("work location preference", "location preference",
+                    "preferred work location", "preferred location");
+            case "sponsorship required" -> Set.of("sponsorship required", "visa sponsorship",
+                    "immigration sponsorship", "immigration related support", "requires sponsorship");
+            case "company familiarity" -> Set.of("company familiarity", "familiar with company");
+            case "application source" -> Set.of("application source", "how did you hear", "referral source");
+            case "previously employed by company" -> Set.of("previously employed by company",
+                    "worked at company before", "employed by company before");
             default -> Set.of(label);
         };
     }

@@ -14,7 +14,7 @@ INSTALL_DIR="$HOME/Library/Application Support/Yuqi Application Copilot"
 HOST_JAR="$INSTALL_DIR/portfolio-application-copilot.jar"
 HOST_LAUNCHER="$INSTALL_DIR/run-native-host.sh"
 
-"$ROOT/mvnw" -q -DskipTests package
+"$ROOT/mvnw" -q -DskipTests clean package
 JAR_SOURCE="$(find "$ROOT/target" -maxdepth 1 -name 'portfolio-application-copilot-*.jar' ! -name '*.original' | head -n 1)"
 if [[ -z "$JAR_SOURCE" ]]; then
   print -u2 "Application Copilot native host JAR was not built."
