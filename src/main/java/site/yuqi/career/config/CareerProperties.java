@@ -4,9 +4,6 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "career")
 public record CareerProperties(String internalToken, String ownerKey, Duration profileTtl,
         McpGateway mcpGateway, ResumeStorage resumeStorage) {
-    public CareerProperties(String internalToken, String ownerKey, Duration profileTtl, McpGateway mcpGateway) {
-        this(internalToken, ownerKey, profileTtl, mcpGateway, null);
-    }
     public CareerProperties {
         profileTtl = profileTtl == null ? Duration.ofHours(6) : profileTtl;
         mcpGateway = mcpGateway == null ? new McpGateway("http://localhost:8091", "", Duration.ofSeconds(12)) : mcpGateway;

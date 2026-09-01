@@ -31,6 +31,6 @@ class FieldCipherTest {
 
     private CareerProperties properties(String key) {
         return new CareerProperties("internal", key, Duration.ofHours(6),
-                new CareerProperties.McpGateway("http://localhost:8091", "gateway", Duration.ofSeconds(12)));
+                new CareerProperties.McpGateway("http://localhost:8091", "gateway", Duration.ofSeconds(12)), null);
     }
 }
