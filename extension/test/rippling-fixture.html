@@ -18,6 +18,20 @@
         <input id="company-search" role="searchbox" aria-label="Search" type="text">
         <input id="anonymous-control" aria-label="textbox" type="text">
         <select id="anonymous-select" aria-label="Select..."><option>Select...</option></select>
+        <div class="field" data-field>
+          <label id="gender-label">Gender</label>
+          <button id="gender" type="button" role="combobox" aria-labelledby="gender-label" aria-controls="gender-options" aria-required="true">Select...</button>
+          <div id="gender-options" role="listbox" hidden>
+            <button type="button" role="option">Male</button>
+            <button type="button" role="option">Female</button>
+            <button type="button" role="option">Decline to self-identify</button>
+          </div>
+        </div>
+        <fieldset>
+          <legend>Consent to receiving text message updates</legend>
+          <label><input type="radio" name="smsConsent" value="yes">Yes - I consent to receiving text messages</label>
+          <label><input type="radio" name="smsConsent" value="no">No - I do not consent to receiving text messages</label>
+        </fieldset>
         <button type="submit">Submit application</button>
       </form>
     </main>

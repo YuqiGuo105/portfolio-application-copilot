@@ -205,7 +205,7 @@ async function applyToActivePage(values) {
     return { id, value, label: field.label || '', semanticKey: field.semanticKey || '' };
   });
   const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [instructions],
-    func: (approved) => globalThis.__yuqiApplicationCopilot?.apply(approved) || 0 });
+    func: async (approved) => await globalThis.__yuqiApplicationCopilot?.apply(approved) || 0 });
   return result || 0;
 }
 

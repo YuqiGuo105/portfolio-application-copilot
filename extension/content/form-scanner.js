@@ -2,10 +2,7 @@ globalThis.__yuqiApplicationCopilot = {
   scan() {
     const controls = formControls().filter(isVisible);
     const indexedControls = controls.map((element, index) => ({ element, index }));
-    const fields = indexedControls
-      .filter(({ element }) => isApplicationControl(element))
-      .map(({ element, index }) => describeField(element, index))
-      .filter((field) => field.label);
+    const fields = describeApplicationFields(indexedControls);
     const files = indexedControls
       .filter(({ element }) => element.type === 'file')
       .map(({ element, index }) => {
@@ -17,32 +14,33 @@ globalThis.__yuqiApplicationCopilot = {
       pageType: classifyPage(controls), origin: location.origin, url: location.href, title: document.title,
       fields, files, action: detectPrimaryAction(), outcome: detectSubmissionOutcome() };
   },
-  apply(values) {
+  async apply(values) {
     const controls = formControls();
     const instructions = Array.isArray(values) ? values : Object.entries(values)
       .map(([id, value]) => ({ id, value }));
     const used = new Set();
     let applied = 0;
-    instructions.forEach((instruction) => {
+    for (const instruction of instructions) {
       const match = findControl(controls, instruction, used);
-      if (!match) return;
+      if (!match) continue;
       const { element } = match;
       const value = instruction.value;
-      if (element.type === 'checkbox') {
+      if (isCustomCombobox(element)) {
+        if (!await chooseCustomOption(element, value)) continue;
+      } else if (element.type === 'checkbox') {
         setChecked(element, value === true || ['true', 'yes', '1'].includes(String(value).toLowerCase()));
       } else if (element.type === 'radio') {
-        const matches = element.value === String(value) || labelFor(element).toLowerCase().includes(String(value).toLowerCase());
-        if (!matches) return;
-        setChecked(element, true);
+        const radio = findRadioOption(element, value);
+        if (!radio) continue;
+        setChecked(radio, true);
       } else if (element.tagName === 'SELECT') {
-        const option = [...element.options].find((item) => item.value === String(value) ||
-          item.text.trim().toLowerCase() === String(value).trim().toLowerCase());
-        if (!option) return;
+        const option = findMatchingOption([...element.options], value);
+        if (!option) continue;
         setValue(element, option.value);
       } else setValue(element, valueForElement(element, value));
       used.add(element);
       applied += 1;
-    });
+    }
     return applied;
   },
   async applyFile(fieldId, payload) {
@@ -69,10 +67,32 @@ globalThis.__yuqiApplicationCopilot = {
   }
 };
 
-function formControls() { return [...document.querySelectorAll('input, select, textarea')]; }
+function formControls() {
+  return [...document.querySelectorAll('input, select, textarea, [role="combobox"], button[aria-haspopup="listbox"]')]
+    .filter((element, index, controls) => controls.indexOf(element) === index);
+}
+function describeApplicationFields(indexedControls) {
+  const fields = [];
+  const radioGroups = new Set();
+  indexedControls.forEach(({ element, index }) => {
+    if (!isApplicationControl(element)) return;
+    if (element.type === 'radio' && element.name) {
+      const id = radioGroupId(element);
+      if (radioGroups.has(id)) return;
+      radioGroups.add(id);
+      const label = radioGroupLabel(element);
+      if (label) fields.push(describeField(element, index, { id, label }));
+      return;
+    }
+    const field = describeField(element, index);
+    if (field.label) fields.push(field);
+  });
+  return fields;
+}
 function findControl(controls, instruction, used) {
   const indexed = controls.map((element, index) => ({ element, index })).filter(({ element }) => !used.has(element));
-  const exact = indexed.find(({ element, index }) => stableId(element, index) === instruction.id);
+  const exact = indexed.find(({ element, index }) => stableId(element, index) === instruction.id ||
+    (element.type === 'radio' && radioGroupId(element) === instruction.id));
   if (exact) return exact;
   if (instruction.semanticKey) {
     const semantic = indexed.filter(({ element }) => semanticKeyFor(element) === instruction.semanticKey);
@@ -84,13 +104,14 @@ function findControl(controls, instruction, used) {
   const label = normalizeText(instruction.label);
   return label ? indexed.find(({ element }) => normalizeText(labelFor(element)) === label) : null;
 }
-function describeField(element, index) {
-  const id = stableId(element, index);
-  const label = labelFor(element);
-  return { id, requirementId: element.type === 'radio' && element.name ? `radio:${element.name}` : id,
-    label, semanticKey: semanticKeyFor(element, label), type: element.type || element.tagName.toLowerCase(),
+function describeField(element, index, override = {}) {
+  const id = override.id || stableId(element, index);
+  const label = override.label || labelFor(element);
+  return { id, requirementId: element.type === 'radio' && element.name ? radioGroupId(element) : id,
+    label, semanticKey: semanticKeyFor(element, label), type: isCustomCombobox(element) ? 'combobox' : element.type || element.tagName.toLowerCase(),
     autocomplete: element.autocomplete || '', required: element.required === true || element.getAttribute('aria-required') === 'true',
-    options: element.tagName === 'SELECT' ? [...element.options].map((option) => option.text.trim()).filter(Boolean) : radioOptions(element) };
+    options: element.tagName === 'SELECT' ? [...element.options].map(optionText).filter(Boolean) :
+      element.type === 'radio' ? radioOptions(element) : customOptions(element) };
 }
 function detectAdapter(hostname) {
   const host = String(hostname || '').toLowerCase();
@@ -101,7 +122,8 @@ function detectAdapter(hostname) {
   return 'GENERIC';
 }
 function isApplicationControl(element) {
-  if (['hidden', 'submit', 'button', 'file', 'reset', 'image', 'search'].includes(element.type)) return false;
+  const customCombobox = isCustomCombobox(element);
+  if (!customCombobox && ['hidden', 'submit', 'button', 'file', 'reset', 'image', 'search'].includes(element.type)) return false;
   if (element.disabled || element.getAttribute('aria-hidden') === 'true') return false;
   const label = normalizeText(labelFor(element));
   const identity = normalizeText(fieldIdentity(element, label));
@@ -148,6 +170,67 @@ function radioOptions(element) {
   return [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)]
     .map((option) => labelFor(option) || option.value).filter(Boolean);
 }
+function radioGroupId(element) { return `radio:${element.name}`; }
+function radioGroupLabel(element) {
+  const group = element.closest('fieldset, [role="radiogroup"], [role="group"]');
+  const legend = group?.querySelector(':scope > legend');
+  const labelled = labelledByText(group);
+  return cleanLabel(legend?.textContent || labelled || contextualLabel(group) || element.name);
+}
+function findRadioOption(element, value) {
+  const radios = element.name
+    ? [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)] : [element];
+  return radios.find((radio) => choiceMatches(radio.value, value) || choiceMatches(labelFor(radio), value));
+}
+function isCustomCombobox(element) {
+  return element.getAttribute('role') === 'combobox' || element.getAttribute('aria-haspopup') === 'listbox';
+}
+function customOptions(element) {
+  return linkedOptions(element).map(optionText).filter(Boolean);
+}
+function linkedOptions(element) {
+  const ids = `${element.getAttribute('aria-controls') || ''} ${element.getAttribute('aria-owns') || ''}`.trim().split(/\s+/).filter(Boolean);
+  return ids.flatMap((id) => [...(document.getElementById(id)?.querySelectorAll('[role="option"], option') || [])]);
+}
+async function chooseCustomOption(element, value) {
+  element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
+  element.click();
+  const options = await waitForOptions(element);
+  const option = findMatchingOption(options, value);
+  if (!option) return false;
+  option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
+  option.click();
+  dispatch(element);
+  return true;
+}
+async function waitForOptions(element) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const linked = linkedOptions(element).filter(isVisible);
+    const visible = [...document.querySelectorAll('[role="option"]')].filter(isVisible);
+    const options = linked.length ? linked : visible;
+    if (options.length) return options;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return [];
+}
+function findMatchingOption(options, value) {
+  return options.find((option) => choiceMatches(option.value, value) || choiceMatches(optionText(option), value));
+}
+function optionText(option) { return (option.innerText || option.textContent || '').replace(/\s+/g, ' ').trim(); }
+function choiceMatches(candidate, requested) {
+  const left = canonicalChoice(candidate);
+  const right = canonicalChoice(requested);
+  if (!left || !right) return false;
+  return left === right || left.includes(right) || right.includes(left);
+}
+function canonicalChoice(value) {
+  const normalized = normalizeText(value).replace(/\b(i am|i do|i would|myself)\b/g, '').replace(/\s+/g, ' ').trim();
+  if (/\b(decline|prefer not|wish not|dont wish|do not wish)\b/.test(normalized)) return 'decline';
+  if (/\bno\b/.test(normalized) && /\b(consent|text message|sms)\b/.test(normalized)) return 'no consent';
+  if (/^no\b/.test(normalized)) return 'no';
+  if (/^yes\b/.test(normalized)) return 'yes';
+  return normalized;
+}
 function detectPrimaryAction() {
   const candidates = [...document.querySelectorAll('button, input[type="submit"]')].filter(isVisible).map((button) => ({
     text: (button.innerText || button.textContent || button.value || button.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim(), disabled: button.disabled === true
@@ -185,9 +268,24 @@ function labelFor(element) {
     .map((id) => document.getElementById(id)?.innerText || document.getElementById(id)?.textContent).filter(Boolean).join(' ');
   const describedBy = (element.getAttribute('aria-describedby') || '').split(/\s+/)
     .map((id) => document.getElementById(id)?.innerText || document.getElementById(id)?.textContent).filter(Boolean).join(' ');
-  return (nativeLabels || labelledBy || element.getAttribute('aria-label') || element.placeholder || describedBy ||
-    element.name || element.id || '').replace(/\s+/g, ' ').trim();
+  const contextual = contextualLabel(element);
+  return cleanLabel(nativeLabels || labelledBy || element.getAttribute('aria-label') || element.placeholder || describedBy ||
+    contextual || element.name || element.id || '');
 }
+function labelledByText(element) {
+  return (element?.getAttribute?.('aria-labelledby') || '').split(/\s+/)
+    .map((id) => document.getElementById(id)?.innerText || document.getElementById(id)?.textContent).filter(Boolean).join(' ');
+}
+function contextualLabel(element) {
+  const container = element?.closest?.('fieldset, [data-field], [role="group"], [role="radiogroup"], .field, .form-field');
+  const candidate = container?.querySelector?.(':scope > label, :scope > legend, :scope > [data-label], :scope > h2, :scope > h3, :scope > h4');
+  if (candidate && !candidate.contains(element)) return candidate.textContent;
+  let sibling = element?.previousElementSibling;
+  while (sibling && ['SCRIPT', 'STYLE'].includes(sibling.tagName)) sibling = sibling.previousElementSibling;
+  const text = sibling?.textContent?.replace(/\s+/g, ' ').trim();
+  return text && text.length <= 180 ? text : '';
+}
+function cleanLabel(value) { return String(value || '').replace(/\s+/g, ' ').trim(); }
 function isUsernameField(element) {
   const identity = `${element.type} ${element.autocomplete} ${element.name} ${element.id} ${labelFor(element)}`.toLowerCase();
   return element.type === 'email' || /\b(email|e-mail|username|user name)\b/.test(identity);

@@ -12,7 +12,7 @@ const dom = new JSDOM(html, {
 });
 dom.window.CSS = { escape: (value) => String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&') };
 
-for (const element of dom.window.document.querySelectorAll('input, select, textarea, button')) {
+for (const element of dom.window.document.querySelectorAll('*')) {
   element.getClientRects = () => [{ width: 100, height: 30 }];
 }
 dom.window.eval(scanner);
@@ -33,7 +33,7 @@ dom.window.document.querySelector('form').addEventListener('submit', (event) => 
   event.preventDefault();
   submitCount += 1;
 });
-const applied = copilot.apply({
+const applied = await copilot.apply({
   firstname: 'Yuqi',
   lastname: 'Guo',
   email: 'fixture@example.test',
@@ -57,21 +57,31 @@ const rippling = new JSDOM(ripplingFixture, {
   runScripts: 'outside-only'
 });
 rippling.window.CSS = dom.window.CSS;
-for (const element of rippling.window.document.querySelectorAll('input, select, textarea, button')) {
+for (const element of rippling.window.document.querySelectorAll('*')) {
   element.getClientRects = () => [{ width: 100, height: 30 }];
 }
 rippling.window.eval(scanner);
+const genderControl = rippling.window.document.querySelector('#gender');
+const genderOptions = rippling.window.document.querySelector('#gender-options');
+genderControl.addEventListener('click', () => { genderOptions.hidden = false; });
+genderOptions.querySelectorAll('[role="option"]').forEach((option) => {
+  option.addEventListener('click', () => {
+    genderControl.dataset.selected = option.textContent.trim();
+    genderOptions.hidden = true;
+  });
+});
 const ripplingScan = rippling.window.__yuqiApplicationCopilot.scan();
 assert.equal(ripplingScan.adapter, 'RIPPLING');
 assert.equal(ripplingScan.pageType, 'APPLICATION');
-assert.equal(ripplingScan.fields.length, 7, 'Search and anonymous controls must not enter the application workflow.');
+assert.equal(ripplingScan.fields.length, 9, 'Search and anonymous controls must not enter the application workflow.');
 assert.equal(ripplingScan.files.length, 2);
 assert.deepEqual(Array.from(ripplingScan.files, (field) => field.semanticKey), ['resume', 'cover_letter']);
 assert.deepEqual(Array.from(ripplingScan.fields, (field) => field.semanticKey), [
-  'first_name', 'last_name', 'email', 'current_company', 'phone', 'linkedin_url', 'website_url'
+  'first_name', 'last_name', 'email', 'current_company', 'phone', 'linkedin_url', 'website_url', '', ''
 ]);
-assert.equal(ripplingScan.fields.filter((field) => field.required).length, 5);
-const ripplingApplied = rippling.window.__yuqiApplicationCopilot.apply({
+assert.equal(ripplingScan.fields.filter((field) => field.required).length, 6);
+assert.equal(ripplingScan.fields.filter((field) => field.type === 'radio').length, 1, 'Radio choices must be one application field.');
+const ripplingApplied = await rippling.window.__yuqiApplicationCopilot.apply({
   firstName: 'Yuqi',
   lastName: 'Guo',
   email: 'fixture@example.test',
@@ -81,12 +91,20 @@ const ripplingApplied = rippling.window.__yuqiApplicationCopilot.apply({
 assert.equal(ripplingApplied, 5);
 assert.equal(rippling.window.document.querySelector('#phone').value, '3852374754');
 
+const choiceApplied = await rippling.window.__yuqiApplicationCopilot.apply([
+  { id: 'gender', label: 'Gender', value: 'Decline to self-identify' },
+  { id: 'radio:smsConsent', label: 'Consent to receiving text message updates', value: 'No' }
+]);
+assert.equal(choiceApplied, 2);
+assert.equal(genderControl.dataset.selected, 'Decline to self-identify');
+assert.equal(rippling.window.document.querySelector('input[name="smsConsent"][value="no"]').checked, true);
+
 const scannedFirstName = ripplingScan.fields.find((field) => field.semanticKey === 'first_name');
 const firstNameInput = rippling.window.document.querySelector('#first-name');
 firstNameInput.removeAttribute('name');
 firstNameInput.id = 'rerendered-generated-id';
 firstNameInput.value = '';
-const rebound = rippling.window.__yuqiApplicationCopilot.apply([{
+const rebound = await rippling.window.__yuqiApplicationCopilot.apply([{
   id: scannedFirstName.id,
   semanticKey: scannedFirstName.semanticKey,
   label: scannedFirstName.label,
