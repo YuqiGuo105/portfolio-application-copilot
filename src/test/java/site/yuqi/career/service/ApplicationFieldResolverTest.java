@@ -129,6 +129,24 @@ class ApplicationFieldResolverTest {
                 .allMatch(field -> field.status() == FieldResolution.ResolutionStatus.RESOLVED);
     }
 
+    @Test void doesNotUseCurrentLocationAsWorkLocationPreference() {
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(), List.of(), Map.of(
+                        "location", "Salt Lake City, UT",
+                        "city", "Salt Lake City",
+                        "country", "United States"),
+                new CandidateProfile.Source("mcp", List.of("get_profile"), "fresh"));
+
+        FieldResolution result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-location-preference", List.of(
+                        new ResolveFieldsRequest.Field("locations", "Location Preference",
+                                "work_location_preference", "checkbox-group", List.of("Remote")))))
+                .get(0);
+
+        assertThat(result.status()).isEqualTo(FieldResolution.ResolutionStatus.UNSUPPORTED);
+        assertThat(result.value()).isNull();
+    }
+
     @Test void neverUsesProfileSummaryAsAUrlValue() {
         CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
                 List.of(), List.of(), Map.of(),

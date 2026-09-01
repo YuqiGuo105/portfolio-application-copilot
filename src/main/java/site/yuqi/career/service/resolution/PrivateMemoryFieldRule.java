@@ -53,9 +53,9 @@ public class PrivateMemoryFieldRule implements ApplicationFieldRule {
     }
 
     private boolean semanticallyMatches(String left, String right) {
-        if (left.contains(right) || right.contains(left)) return true;
         Set<String> leftTokens = semanticTokens(left);
         Set<String> rightTokens = semanticTokens(right);
+        if (leftTokens.size() < 2 || rightTokens.size() < 2) return false;
         return !leftTokens.isEmpty() && !rightTokens.isEmpty()
                 && (leftTokens.containsAll(rightTokens) || rightTokens.containsAll(leftTokens));
     }
