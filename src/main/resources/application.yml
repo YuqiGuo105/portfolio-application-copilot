@@ -43,6 +43,12 @@ career:
     bucket: ${CAREER_RESUME_BUCKET:career-resumes}
     max-bytes: ${CAREER_RESUME_MAX_BYTES:2097152}
     download-ttl: ${CAREER_RESUME_DOWNLOAD_TTL:2m}
+  question-model:
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      base-url: ${GEMINI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}
+      model: ${GEMINI_QUESTION_MODEL:gemini-2.5-flash-lite}
+      timeout: ${GEMINI_QUESTION_TIMEOUT:15s}
 management:
   endpoints:
     web:

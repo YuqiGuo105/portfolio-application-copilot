@@ -84,4 +84,22 @@ class ApplicationFieldResolverTest {
         assertThat(result.status()).isEqualTo(FieldResolution.ResolutionStatus.RESOLVED);
         assertThat(result.value()).isEqualTo("Goldman Sachs");
     }
+
+    @Test void resolvesCanonicalEeoSemanticsButKeepsThemReviewable() {
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(), List.of(), Map.of(
+                        "gender", "Male",
+                        "please identify your race", "Asian",
+                        "are you hispanic latino", "No"),
+                new CandidateProfile.Source("mcp", List.of("get_profile"), "fresh"));
+
+        List<FieldResolution> result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-eeo", List.of(
+                        new ResolveFieldsRequest.Field("gender", "Gender", "gender", "combobox", List.of("Male", "Female")),
+                        new ResolveFieldsRequest.Field("race", "Please identify your race", "race", "combobox", List.of("Asian", "White")),
+                        new ResolveFieldsRequest.Field("hispanic", "Are you Hispanic/Latino?", "hispanic_or_latino_ethnicity", "combobox", List.of("Yes", "No")))));
+
+        assertThat(result).extracting(FieldResolution::value).containsExactly("Male", "Asian", "No");
+        assertThat(result).allMatch(field -> field.status() == FieldResolution.ResolutionStatus.NEEDS_CONFIRMATION);
+    }
 }

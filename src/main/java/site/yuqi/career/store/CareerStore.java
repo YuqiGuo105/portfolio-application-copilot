@@ -17,6 +17,7 @@ public class CareerStore {
     private static final String PROFILE_KEY = "career:profile:current";
     private static final String ANSWERS_KEY = "career:private-answers:v1";
     private static final String CREDENTIAL_KEY_PREFIX = "career:site-credential:v1:";
+    private static final String QUESTION_CLASSIFICATION_KEY_PREFIX = "career:question-classification:v1:";
     private final StringRedisTemplate redis; private final ObjectMapper mapper; private final FieldCipher cipher; private final Duration profileTtl;
     public CareerStore(StringRedisTemplate redis, ObjectMapper mapper, FieldCipher cipher, CareerProperties properties) {
         this.redis = redis; this.mapper = mapper; this.cipher = cipher; this.profileTtl = properties.profileTtl();
@@ -59,6 +60,16 @@ public class CareerStore {
         } catch (Exception e) {
             throw new IllegalStateException("Unable to persist site credential", e);
         }
+    }
+
+    public Optional<String> getQuestionClassification(String fingerprint) {
+        try { return Optional.ofNullable(redis.opsForValue().get(QUESTION_CLASSIFICATION_KEY_PREFIX + fingerprint)); }
+        catch (Exception ignored) { return Optional.empty(); }
+    }
+
+    public void putQuestionClassification(String fingerprint, String classification) {
+        try { redis.opsForValue().set(QUESTION_CLASSIFICATION_KEY_PREFIX + fingerprint, classification, Duration.ofDays(30)); }
+        catch (Exception ignored) { }
     }
 
     private static String credentialKey(String origin) {

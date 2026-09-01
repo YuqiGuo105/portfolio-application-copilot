@@ -30,4 +30,26 @@ class CodexFieldAdvisorTest {
         assertThat(sanitized.toString()).doesNotContain("never-send", "i140");
         assertThat(sanitized.path("profile").path("skills").get(0).asText()).isEqualTo("Java");
     }
+
+    @Test
+    void classificationInputContainsQuestionsButNeverCandidateMemory() throws Exception {
+        var request = mapper.readTree("""
+                {
+                  "requestId":"request-2",
+                  "page":{"origin":"https://ats.example","title":"Application","pageType":"APPLICATION"},
+                  "profile":{"applicationPreferences":{"gender":"Male","race":"Asian"}},
+                  "fields":[
+                    {"id":"field-1","label":"Please identify your race","type":"combobox","required":false,"options":["Asian","White"]}
+                  ]
+                }
+                """);
+        var advisor = new CodexFieldAdvisor(mapper, Duration.ofSeconds(1), "/not-used", "low");
+
+        var sanitized = advisor.sanitizeClassification(request);
+
+        assertThat(sanitized.has("profile")).isFalse();
+        assertThat(sanitized.toString()).doesNotContain("Male");
+        assertThat(sanitized.path("fields").get(0).path("label").asText()).isEqualTo("Please identify your race");
+        assertThat(sanitized.path("fields").get(0).path("options").get(0).asText()).isEqualTo("Asian");
+    }
 }

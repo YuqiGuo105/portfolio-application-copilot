@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Yuqi Application Copilot",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Review and fill applications, sign-up forms, and logins through Yuqi's authenticated MCP platform.",
   "icons": {
     "16": "icons/yuqi-16.png",

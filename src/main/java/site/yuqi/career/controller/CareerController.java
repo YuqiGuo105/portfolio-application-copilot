@@ -5,6 +5,7 @@ import site.yuqi.career.model.*;
 import site.yuqi.career.service.ApplicationFieldResolver;
 import site.yuqi.career.service.ApplicationWorkflowService;
 import site.yuqi.career.service.CandidateProfileService;
+import site.yuqi.career.service.GeminiQuestionClassifier;
 import site.yuqi.career.service.SiteCredentialService;
 import site.yuqi.career.service.PrivateVaultService;
 import site.yuqi.career.service.ResumeAssetService;
@@ -17,12 +18,14 @@ public class CareerController {
     private final PrivateVaultService vault;
     private final ApplicationWorkflowService workflows;
     private final ResumeAssetService resumeAssets;
+    private final GeminiQuestionClassifier questionClassifier;
     public CareerController(CandidateProfileService profiles, ApplicationFieldResolver resolver,
             SiteCredentialService credentials, PrivateVaultService vault, ApplicationWorkflowService workflows,
-            ResumeAssetService resumeAssets) {
+            ResumeAssetService resumeAssets, GeminiQuestionClassifier questionClassifier) {
         this.profiles = profiles; this.resolver = resolver; this.credentials = credentials; this.vault = vault;
         this.workflows = workflows;
         this.resumeAssets = resumeAssets;
+        this.questionClassifier = questionClassifier;
     }
     @GetMapping("/candidate-profile") public CandidateProfile profile() { return profiles.get(); }
     @PostMapping("/candidate-profile/refresh") public CandidateProfile refreshProfile() { return profiles.refresh(); }
@@ -32,6 +35,10 @@ public class CareerController {
         return Map.of("applicationId", request.applicationId(), "fields", fields,
                 "resolved", fields.stream().filter(f -> f.status() == FieldResolution.ResolutionStatus.RESOLVED).count(),
                 "requiresReview", fields.stream().filter(f -> f.status() != FieldResolution.ResolutionStatus.RESOLVED).count());
+    }
+    @PostMapping("/application-fields/classify")
+    public QuestionClassificationResult classifyFields(@Valid @RequestBody ResolveFieldsRequest request) {
+        return questionClassifier.classify(request);
     }
     @GetMapping("/site-credentials") public SiteCredential siteCredential(@RequestParam String origin) {
         return credentials.get(origin).orElseThrow(() -> new SiteCredentialNotFoundException(origin));

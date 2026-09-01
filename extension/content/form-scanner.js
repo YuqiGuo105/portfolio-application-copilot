@@ -68,8 +68,27 @@ globalThis.__yuqiApplicationCopilot = {
 };
 
 function formControls() {
-  return [...document.querySelectorAll('input, select, textarea, [role="combobox"], button[aria-haspopup="listbox"]')]
+  const declared = [...document.querySelectorAll('input, select, textarea, button, [role="combobox"], [aria-controls], [aria-haspopup], [aria-autocomplete], [tabindex], [contenteditable="true"]')];
+  return [...declared, ...customPromptControls()]
     .filter((element, index, controls) => controls.indexOf(element) === index);
+}
+function customPromptControls() {
+  return [...document.querySelectorAll('div, span')]
+    .filter((element) => {
+      const prompt = normalizeText(element.innerText || element.textContent);
+      return /^(select|choose)( |\.|$)/.test(prompt) &&
+        ![...element.children].some((child) => normalizeText(child.innerText || child.textContent) === prompt);
+    })
+    .map((element) => nearestInteractiveControl(element));
+}
+function nearestInteractiveControl(element) {
+  let candidate = element;
+  for (let depth = 0; candidate && depth < 5; depth += 1, candidate = candidate.parentElement) {
+    if (candidate.id || candidate.getAttribute('name') ||
+        candidate.matches('button, [role="combobox"], [aria-controls], [aria-haspopup], [aria-autocomplete], [tabindex]') ||
+        typeof candidate.onclick === 'function') return candidate;
+  }
+  return element;
 }
 function isUsableFileInput(element) {
   return element.type === 'file' && !element.disabled;
@@ -126,6 +145,8 @@ function detectAdapter(hostname) {
 }
 function isApplicationControl(element) {
   const customCombobox = isCustomCombobox(element);
+  const nativeControl = ['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName);
+  if (!nativeControl && !customCombobox) return false;
   if (!customCombobox && ['hidden', 'submit', 'button', 'file', 'reset', 'image', 'search'].includes(element.type)) return false;
   if (element.disabled || element.getAttribute('aria-hidden') === 'true') return false;
   const label = normalizeText(labelFor(element));
@@ -178,7 +199,23 @@ function radioGroupLabel(element) {
   const group = element.closest('fieldset, [role="radiogroup"], [role="group"]');
   const legend = group?.querySelector(':scope > legend');
   const labelled = labelledByText(group);
-  return cleanLabel(legend?.textContent || labelled || contextualLabel(group) || element.name);
+  return cleanLabel(legend?.textContent || labelled || contextualLabel(group) || radioQuestion(element) || element.name);
+}
+function radioQuestion(element) {
+  const radios = element.name
+    ? [...document.querySelectorAll(`input[type="radio"][name="${CSS.escape(element.name)}"]`)] : [element];
+  let scope = (radios[0].closest('label') || radios[0]).parentElement;
+  while (scope && !radios.every((radio) => scope.contains(radio))) scope = scope.parentElement;
+  if (!scope) return '';
+  let branch = radios[0].closest('label') || radios[0];
+  while (branch.parentElement && branch.parentElement !== scope) branch = branch.parentElement;
+  let sibling = branch.previousElementSibling;
+  while (sibling) {
+    const text = (sibling.innerText || sibling.textContent || '').replace(/\s+/g, ' ').trim();
+    if (text && text.length <= 600 && !sibling.querySelector('input, select, textarea, [role="combobox"]')) return text;
+    sibling = sibling.previousElementSibling;
+  }
+  return contextualLabel(scope);
 }
 function findRadioOption(element, value) {
   const radios = element.name
@@ -186,14 +223,20 @@ function findRadioOption(element, value) {
   return radios.find((radio) => choiceMatches(radio.value, value) || choiceMatches(labelFor(radio), value));
 }
 function isCustomCombobox(element) {
-  return element.getAttribute('role') === 'combobox' || element.getAttribute('aria-haspopup') === 'listbox';
+  if (element.getAttribute('role') === 'combobox' || element.getAttribute('aria-haspopup') === 'listbox') return true;
+  if (element.getAttribute('aria-autocomplete') === 'list') return true;
+  const controlled = (element.getAttribute('aria-controls') || '').split(/\s+/).filter(Boolean)
+    .map((id) => document.getElementById(id));
+  if (controlled.some((target) => target?.getAttribute('role') === 'listbox')) return true;
+  const prompt = normalizeText(element.placeholder || element.innerText || element.textContent);
+  return /^(select|choose)( |$)/.test(prompt) && Boolean(contextualLabel(element));
 }
 function customOptions(element) {
   return linkedOptions(element).map(optionText).filter(Boolean);
 }
 function linkedOptions(element) {
   const ids = `${element.getAttribute('aria-controls') || ''} ${element.getAttribute('aria-owns') || ''}`.trim().split(/\s+/).filter(Boolean);
-  return ids.flatMap((id) => [...(document.getElementById(id)?.querySelectorAll('[role="option"], [role="menuitemradio"], option') || [])]);
+  return ids.flatMap((id) => optionElements(document.getElementById(id)));
 }
 async function chooseCustomOption(element, value) {
   element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
@@ -208,14 +251,24 @@ async function chooseCustomOption(element, value) {
   return true;
 }
 async function waitForOptions(element) {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     const linked = linkedOptions(element).filter(isVisible);
-    const visible = [...document.querySelectorAll('[role="option"], [role="menuitemradio"]')].filter(isVisible);
+    const visible = [...document.querySelectorAll('[role="listbox"]')].filter(isVisible).flatMap(optionElements);
     const options = linked.length ? linked : visible;
     if (options.length) return options;
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 75));
   }
   return [];
+}
+function optionElements(container) {
+  if (!container) return [];
+  const explicit = [...container.querySelectorAll('[role="option"], [role="menuitemradio"], option')];
+  if (explicit.length) return explicit;
+  return [...container.querySelectorAll('*')].filter((candidate) => {
+    const text = optionText(candidate);
+    if (!text || text.length > 200 || candidate.matches('input, select, textarea')) return false;
+    return ![...candidate.children].some((child) => optionText(child) === text);
+  });
 }
 function findMatchingOption(options, value) {
   return options.find((option) => choiceMatches(option.value, value) || choiceMatches(optionText(option), value));
@@ -264,6 +317,8 @@ function classifyPage(controls) {
 function stableId(element, index) {
   const identity = element.name || element.getAttribute('data-automation-id') || element.id;
   if (identity) return element.type === 'radio' ? `${identity}:${element.value || index}` : identity;
+  const semanticKey = semanticKeyFor(element);
+  if (semanticKey) return `semantic:${semanticKey}`;
   return `field-${index}`;
 }
 function labelFor(element) {
@@ -273,8 +328,18 @@ function labelFor(element) {
   const describedBy = (element.getAttribute('aria-describedby') || '').split(/\s+/)
     .map((id) => document.getElementById(id)?.innerText || document.getElementById(id)?.textContent).filter(Boolean).join(' ');
   const contextual = contextualLabel(element);
-  return cleanLabel(nativeLabels || labelledBy || element.getAttribute('aria-label') || element.placeholder || describedBy ||
-    contextual || element.name || element.id || '');
+  const ariaLabel = element.getAttribute('aria-label') || '';
+  const genericAriaLabel = isGenericControlLabel(ariaLabel);
+  const meaningfulAriaLabel = genericAriaLabel ? '' : ariaLabel;
+  const nativeControl = ['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName);
+  const contextualLabelValue = genericAriaLabel && nativeControl ? '' : contextual;
+  const explicitLabel = nativeLabels || labelledBy || meaningfulAriaLabel || contextualLabelValue || describedBy;
+  if (explicitLabel) return cleanLabel(explicitLabel);
+  if (ariaLabel) return cleanLabel(ariaLabel);
+  return cleanLabel(element.placeholder || element.name || element.id || '');
+}
+function isGenericControlLabel(value) {
+  return /^(select|choose|search|textbox|input)( |\.|$)/.test(normalizeText(value));
 }
 function labelledByText(element) {
   return (element?.getAttribute?.('aria-labelledby') || '').split(/\s+/)
@@ -284,10 +349,31 @@ function contextualLabel(element) {
   const container = element?.closest?.('fieldset, [data-field], [role="group"], [role="radiogroup"], .field, .form-field');
   const candidate = container?.querySelector?.(':scope > label, :scope > legend, :scope > [data-label], :scope > h2, :scope > h3, :scope > h4');
   if (candidate && !candidate.contains(element)) return candidate.textContent;
-  let sibling = element?.previousElementSibling;
-  while (sibling && ['SCRIPT', 'STYLE'].includes(sibling.tagName)) sibling = sibling.previousElementSibling;
-  const text = sibling?.textContent?.replace(/\s+/g, ' ').trim();
-  return text && text.length <= 180 ? text : '';
+  let local = element?.parentElement;
+  for (let depth = 0; local && depth < 4; depth += 1) {
+    const localHeading = local.querySelector?.(':scope > label, :scope > legend, :scope > [data-label], :scope > h1, :scope > h2, :scope > h3, :scope > h4');
+    if (localHeading && !localHeading.contains(element)) return localHeading.textContent;
+    const controls = local.querySelectorAll('input, select, textarea, [role="combobox"], button[aria-haspopup="listbox"]');
+    const text = (local.innerText || local.textContent || '').replace(/\s+/g, ' ').trim();
+    if (controls.length === 1 && text && text.length <= 180) {
+      const cleaned = text.replace(/^(select|choose)(\.\.\.)?$/i, '').trim();
+      if (cleaned) return cleaned;
+    }
+    local = local.parentElement;
+  }
+  let node = element;
+  for (let depth = 0; node && depth < 5; depth += 1) {
+    let sibling = node.previousElementSibling;
+    while (sibling) {
+      const labelled = sibling.matches?.('label, legend, h1, h2, h3, h4, [data-label]')
+        ? sibling : sibling.querySelector?.('label, legend, h1, h2, h3, h4, [data-label]');
+      const text = (labelled?.textContent || sibling.textContent || '').replace(/\s+/g, ' ').trim();
+      if (text && text.length <= 180 && !sibling.querySelector?.('input, select, textarea, [role="combobox"]')) return text;
+      sibling = sibling.previousElementSibling;
+    }
+    node = node.parentElement;
+  }
+  return '';
 }
 function cleanLabel(value) { return String(value || '').replace(/\s+/g, ' ').trim(); }
 function isUsernameField(element) {

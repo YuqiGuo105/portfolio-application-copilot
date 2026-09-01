@@ -15,10 +15,11 @@ public final class CodexNativeHost {
         while ((request = protocol.read(System.in)) != null) {
             ObjectNode response;
             try {
-                if (!"resolve_fields".equals(request.path("type").asText())) {
-                    throw new IllegalArgumentException("Unsupported native operation");
-                }
-                response = advisor.advise(request);
+                response = switch (request.path("type").asText()) {
+                    case "resolve_fields" -> advisor.advise(request);
+                    case "classify_fields" -> advisor.classify(request);
+                    default -> throw new IllegalArgumentException("Unsupported native operation");
+                };
             } catch (Exception error) {
                 System.err.println("Codex native advisor failed: " + error.getMessage());
                 response = mapper.createObjectNode();

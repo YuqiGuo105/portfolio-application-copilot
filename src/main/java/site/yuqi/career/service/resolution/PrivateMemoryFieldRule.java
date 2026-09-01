@@ -5,12 +5,18 @@ import org.springframework.stereotype.Component;
 import site.yuqi.career.model.FieldResolution;
 
 import java.util.Map;
+import java.util.Arrays;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @Order(10)
 public class PrivateMemoryFieldRule implements ApplicationFieldRule {
+    private static final Set<String> WEAK_TOKENS = Set.of(
+            "a", "an", "and", "are", "do", "does", "have", "identify", "is", "of", "or",
+            "please", "question", "select", "status", "the", "to", "you", "your");
     private final SensitiveFieldPolicy policy;
 
     public PrivateMemoryFieldRule(SensitiveFieldPolicy policy) { this.policy = policy; }
@@ -36,11 +42,26 @@ public class PrivateMemoryFieldRule implements ApplicationFieldRule {
         }
         for (Map.Entry<String, Object> entry : answers.entrySet()) {
             String key = policy.normalize(entry.getKey());
-            if (aliases.contains(key) || aliases.stream().anyMatch(alias -> alias.contains(key) || key.contains(alias))) {
+            if (aliases.contains(key) || aliases.stream().anyMatch(alias -> semanticallyMatches(alias, key))) {
                 return entry.getValue();
             }
         }
         return null;
+    }
+
+    private boolean semanticallyMatches(String left, String right) {
+        if (left.contains(right) || right.contains(left)) return true;
+        Set<String> leftTokens = semanticTokens(left);
+        Set<String> rightTokens = semanticTokens(right);
+        return !leftTokens.isEmpty() && !rightTokens.isEmpty()
+                && (leftTokens.containsAll(rightTokens) || rightTokens.containsAll(leftTokens));
+    }
+
+    private Set<String> semanticTokens(String value) {
+        return Arrays.stream(policy.normalize(value).split("\\s+"))
+                .map(token -> token.toLowerCase(Locale.ROOT))
+                .filter(token -> !token.isBlank() && !WEAK_TOKENS.contains(token))
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     private Set<String> aliases(String label) {

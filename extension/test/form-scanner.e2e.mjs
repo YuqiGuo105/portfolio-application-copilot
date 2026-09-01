@@ -70,14 +70,27 @@ for (const element of rippling.window.document.querySelectorAll('*')) {
 rippling.window.eval(scanner);
 const genderControl = rippling.window.document.querySelector('#gender');
 const genderOptions = rippling.window.document.querySelector('#gender-options');
+const raceControl = rippling.window.document.querySelector('#race');
+const raceOptions = rippling.window.document.querySelector('#race-options');
+const hispanicControl = rippling.window.document.querySelector('#hispanic');
+const hispanicOptions = rippling.window.document.querySelector('#hispanic-options');
 const locationControl = rippling.window.document.querySelector('#location');
 const locationOptions = rippling.window.document.querySelector('#location-options');
 genderControl.addEventListener('click', () => { genderOptions.hidden = false; });
+raceControl.addEventListener('click', () => { raceOptions.hidden = false; });
+hispanicControl.addEventListener('click', () => { hispanicOptions.hidden = false; });
 locationControl.addEventListener('click', () => { locationOptions.hidden = false; });
-genderOptions.querySelectorAll('[role="option"]').forEach((option) => {
+genderOptions.querySelectorAll('span').forEach((option) => {
   option.addEventListener('click', () => {
     genderControl.dataset.selected = option.textContent.trim();
     genderOptions.hidden = true;
+  });
+});
+[...raceOptions.querySelectorAll('span'), ...hispanicOptions.querySelectorAll('span')].forEach((option) => {
+  option.addEventListener('click', () => {
+    const control = option.closest('[role="listbox"]') === raceOptions ? raceControl : hispanicControl;
+    control.dataset.selected = option.textContent.trim();
+    option.closest('[role="listbox"]').hidden = true;
   });
 });
 locationOptions.querySelectorAll('[role="option"]').forEach((option) => {
@@ -89,7 +102,7 @@ locationOptions.querySelectorAll('[role="option"]').forEach((option) => {
 const ripplingScan = rippling.window.__yuqiApplicationCopilot.scan();
 assert.equal(ripplingScan.adapter, 'RIPPLING');
 assert.equal(ripplingScan.pageType, 'APPLICATION');
-assert.equal(ripplingScan.fields.length, 10, 'Search and anonymous controls must not enter the application workflow.');
+assert.equal(ripplingScan.fields.length, 12, 'Search and anonymous controls must not enter the application workflow.');
 assert.equal(ripplingScan.files.length, 2);
 assert.deepEqual(Array.from(ripplingScan.files, (field) => field.semanticKey), ['resume', 'cover_letter']);
 const hiddenResumeInput = rippling.window.document.querySelector('#resume');
@@ -101,8 +114,12 @@ const attachedResume = await rippling.window.__yuqiApplicationCopilot.applyFile(
 assert.equal(attachedResume.name, 'Yuqi_Guo_Resume_SDE2.pdf');
 assert.equal(hiddenResumeInput.files[0].name, 'Yuqi_Guo_Resume_SDE2.pdf');
 assert.deepEqual(Array.from(ripplingScan.fields, (field) => field.semanticKey), [
-  'first_name', 'last_name', 'email', 'current_company', 'phone', 'linkedin_url', 'website_url', '', '', ''
+  'first_name', 'last_name', 'email', 'current_company', 'phone', 'linkedin_url', 'website_url', '',
+  '', '', '', ''
 ]);
+assert.equal(ripplingScan.fields.find((field) => field.id === 'race').label, 'Please identify your race');
+assert.deepEqual(Array.from(ripplingScan.fields.find((field) => field.id === 'gender').options),
+  ['Male', 'Female', 'Choose not to disclose']);
 assert.equal(ripplingScan.fields.filter((field) => field.required).length, 7);
 assert.equal(ripplingScan.fields.filter((field) => field.type === 'radio').length, 1, 'Radio choices must be one application field.');
 const ripplingApplied = await rippling.window.__yuqiApplicationCopilot.apply({
@@ -116,12 +133,16 @@ assert.equal(ripplingApplied, 5);
 assert.equal(rippling.window.document.querySelector('#phone').value, '3852374754');
 
 const choiceApplied = await rippling.window.__yuqiApplicationCopilot.apply([
-  { id: 'gender', label: 'Gender', value: 'Decline to self-identify' },
+  { id: 'gender', label: 'Gender', semanticKey: 'gender', value: 'Male' },
+  { id: 'race', label: 'Please identify your race', semanticKey: 'race', value: 'Asian' },
+  { id: 'hispanic', label: 'Are you Hispanic/Latino?', semanticKey: 'hispanic_latino', value: 'No' },
   { id: 'location', label: 'Location', value: 'Salt Lake City, UT' },
-  { id: 'radio:smsConsent', label: 'Consent to receiving text message updates', value: 'No' }
+  { id: 'radio:smsConsent', label: 'Check Yes or No to indicate your agreement to receive text message updates from Rippling regarding your job application.', semanticKey: 'sms_consent', value: 'No' }
 ]);
-assert.equal(choiceApplied, 3);
-assert.equal(genderControl.dataset.selected, 'Decline to self-identify');
+assert.equal(choiceApplied, 5);
+assert.equal(genderControl.dataset.selected, 'Male');
+assert.equal(raceControl.dataset.selected, 'Asian');
+assert.equal(hispanicControl.dataset.selected, 'No');
 assert.equal(locationControl.dataset.selected, 'Salt Lake City, UT, United States');
 assert.equal(rippling.window.document.querySelector('input[name="smsConsent"][value="no"]').checked, true);
 

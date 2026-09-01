@@ -1,6 +1,6 @@
 import { AdminSessionError, connectAdminSession, openAdminLogin, restoreAdminSession } from '../shared/admin-session.js';
 import { calculateApplicationProgress } from '../shared/application-progress.js';
-import { resolveWithLocalCodex } from '../shared/codex-client.js';
+import { classifyWithLocalCodex, resolveWithLocalCodex } from '../shared/codex-client.js';
 import { callTool } from '../shared/mcp-client.js';
 
 const status = document.querySelector('#status');
@@ -51,6 +51,10 @@ scanButton.addEventListener('click', async () => {
     if (!currentPage.fields.length && !currentPage.files.length) throw new Error('No visible application fields found on this page.');
     applicationId = crypto.randomUUID();
     await saveActiveWorkflow(currentPage.origin, applicationId);
+    setStatus('Normalizing application questions with local Codex...');
+    const classification = await classifyApplicationQuestions(currentPage, applicationId);
+    currentPage.fields = applyQuestionClassifications(currentPage.fields, classification.fields);
+    currentPage.questionModel = classification.provider;
     renderPageContext(currentPage);
     await callTool('career.start_application_workflow', {
       applicationId,
@@ -100,6 +104,7 @@ scanButton.addEventListener('click', async () => {
     setWorkflow('review');
     const resolvedCount = resolutions.filter((item) => item.status === 'RESOLVED' && item.value != null).length;
     const reviewCount = resolutions.filter((item) => item.status === 'NEEDS_CONFIRMATION' && item.value != null).length;
+    const modelStatus = `Question model: ${currentPage.questionModel || 'raw fallback'}.`;
     const resolutionStatus = codexAvailable
       ? `${resolvedCount} verified value(s) ready and ${reviewCount} sensitive value(s) await confirmation. Local Codex suggestions remain unchecked.`
       : `${resolvedCount} verified value(s) ready and ${reviewCount} sensitive value(s) await confirmation. Local Codex is unavailable; unresolved fields were left blank.`;
@@ -116,21 +121,52 @@ scanButton.addEventListener('click', async () => {
         setWorkflow('review');
         applyButton.disabled = false;
         applyButton.textContent = `Apply ${reviewCount} reviewed answer${reviewCount === 1 ? '' : 's'}`;
-        setStatus(`${autoApplied} verified field(s) filled and the managed resume attached. Confirm the ${reviewCount} preselected sensitive answer${reviewCount === 1 ? '' : 's'}, then apply them once.`);
+        setStatus(`${autoApplied} verified field(s) filled and the managed resume attached. Question model: ${currentPage.questionModel || 'raw fallback'}. Confirm the ${reviewCount} preselected sensitive answer${reviewCount === 1 ? '' : 's'}, then apply them once.`);
       } else {
         await recordCompletedFill(autoApplied, true);
         applyButton.disabled = true;
         applyButton.textContent = 'Safe fields applied';
-        setStatus(`${autoApplied} deterministic field(s) filled and the managed resume attached. Review the page; final submission stays manual.`);
+        setStatus(`${autoApplied} deterministic field(s) filled and the managed resume attached. Question model: ${currentPage.questionModel || 'raw fallback'}. Review the page; final submission stays manual.`);
       }
     } else {
       setWorkflow('review');
       const resumeStatus = resumeField
         ? resumeAssetWarning || 'Choose a local PDF below, then use Apply selected to attach it.' : '';
-      setStatus(`${autoApplied} deterministic field(s) filled automatically. ${resolutionStatus} ${resumeStatus}`.trim(), Boolean(resumeAssetWarning));
+      setStatus(`${autoApplied} deterministic field(s) filled automatically. ${modelStatus} ${resolutionStatus} ${resumeStatus}`.trim(), Boolean(resumeAssetWarning));
     }
   });
 });
+
+async function classifyApplicationQuestions(page, currentApplicationId) {
+  try {
+    const local = await classifyWithLocalCodex({ page, fields: page.fields });
+    return { provider: local.provider || 'local Codex', fields: local.fields || [] };
+  } catch (localError) {
+    console.warn('Local Codex question classifier unavailable', localError);
+  }
+  try {
+    const remote = await callTool('career.classify_application_fields', {
+      applicationId: currentApplicationId,
+      fields: page.fields
+    });
+    return { provider: remote.provider || 'Gemini fallback', fields: remote.fields || [] };
+  } catch (remoteError) {
+    console.warn('Gemini question classifier unavailable', remoteError);
+    return { provider: 'raw-label fallback', fields: [] };
+  }
+}
+
+function applyQuestionClassifications(fields, classifications) {
+  const byId = new Map((classifications || []).map((item) => [item.fieldId, item]));
+  return fields.map((field) => {
+    const classification = byId.get(field.id);
+    if (!classification || classification.status !== 'CLASSIFIED' || Number(classification.confidence) < 0.7 ||
+        !classification.semanticKey) return field;
+    return { ...field, semanticKey: classification.semanticKey,
+      questionClassification: { provider: classification.provider || '', confidence: classification.confidence,
+        category: classification.category || 'OTHER' } };
+  });
+}
 
 document.querySelector('#prepare-account').addEventListener('click', async () => {
   await run('Site account prepared. Review the page before creating it.', async () => {

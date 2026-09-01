@@ -29,16 +29,34 @@
           <label id="gender-label">Gender</label>
           <button id="gender" type="button" role="combobox" aria-labelledby="gender-label" aria-controls="gender-options" aria-required="true">Select...</button>
           <div id="gender-options" role="listbox" hidden>
-            <button type="button" role="option">Male</button>
-            <button type="button" role="option">Female</button>
-            <button type="button" role="option">Decline to self-identify</button>
+            <div><span>Male</span></div>
+            <div><span>Female</span></div>
+            <div><span>Choose not to disclose</span></div>
           </div>
         </div>
-        <fieldset>
-          <legend>Consent to receiving text message updates</legend>
+        <section class="eeo-question">
+          <h3>Please identify your race</h3>
+          <div><div id="race" aria-label="Select..."><span>Select...</span></div></div>
+          <div id="race-options" role="listbox" hidden>
+            <div><span>Asian</span></div>
+            <div><span>White</span></div>
+            <div><span>Choose not to disclose</span></div>
+          </div>
+        </section>
+        <div class="field" data-field>
+          <label id="hispanic-label">Are you Hispanic/Latino?</label>
+          <button id="hispanic" type="button" role="combobox" aria-labelledby="hispanic-label" aria-controls="hispanic-options">Select...</button>
+          <div id="hispanic-options" role="listbox" hidden>
+            <div><span>Yes</span></div>
+            <div><span>No</span></div>
+            <div><span>Choose not to disclose</span></div>
+          </div>
+        </div>
+        <section class="sms-question">
+          <p>Check Yes or No to indicate your agreement to receive text message updates from Rippling regarding your job application.</p>
           <label><input type="radio" name="smsConsent" value="yes">Yes - I consent to receiving text messages</label>
           <label><input type="radio" name="smsConsent" value="no">No - I do not consent to receiving text messages</label>
-        </fieldset>
+        </section>
         <button type="submit">Submit application</button>
       </form>
     </main>

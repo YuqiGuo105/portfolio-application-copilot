@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 final class CodexFieldAdvisor {
     private static final int MAX_FIELDS = 80;
     private static final int MAX_TEXT_LENGTH = 2_000;
-    private static final String SYSTEM_INSTRUCTION = """
+    private static final String ADVISOR_SYSTEM_INSTRUCTION = """
             You are a local, read-only job application field advisor. Return JSON matching the supplied schema.
             Resolve only from the provided sanitized candidate summary and visible form metadata.
             Never infer or invent immigration, work authorization, sponsorship, I-140, compensation, EEO,
@@ -26,58 +26,94 @@ final class CodexFieldAdvisor {
             account-security answers. Mark uncertain or sensitive fields UNRESOLVED. Do not browse, execute tools,
             inspect files, or recommend submitting the form. Keep reasons concise.
             """;
+    private static final String CLASSIFIER_SYSTEM_INSTRUCTION = """
+            You are a local, read-only job application question normalizer. Return JSON matching the supplied schema.
+            Classify every supplied field from its visible label, control type, and options. Produce a concise,
+            stable snake_case semanticKey describing the question's meaning. For common questions, use these exact
+            canonical keys when applicable: first_name, last_name, email, phone, current_company, location,
+            linkedin_url, website_url, gender, race, hispanic_latino, veteran_status, disability_status,
+            sms_consent. Use a natural snake_case normalization only for unfamiliar questions. Do not answer any
+            question and do not infer candidate data.
+            Mark a field UNRESOLVED only when its meaning is genuinely ambiguous. Use category EEO for demographic,
+            veteran, or disability questions; IMMIGRATION for authorization, sponsorship, visa, or I-140 questions;
+            LEGAL for attestations, signatures, background, government, or security-clearance questions;
+            CONTACT, EXPERIENCE, EDUCATION, COMPENSATION, CONSENT, or OTHER otherwise. Do not browse or execute tools.
+            """;
 
     private final ObjectMapper mapper;
     private final Duration timeout;
     private final String codexPath;
     private final String reasoningEffort;
+    private final String model;
 
     CodexFieldAdvisor(ObjectMapper mapper) {
         this(mapper, Duration.ofSeconds(readPositiveInt("YUQI_CODEX_TIMEOUT_SECONDS", 35)),
                 System.getenv().getOrDefault("YUQI_CODEX_PATH", "/Applications/ChatGPT.app/Contents/Resources/codex"),
-                readReasoningEffort());
+                readReasoningEffort(), System.getenv().getOrDefault("YUQI_CODEX_MODEL", "gpt-5.3-codex-spark"));
     }
 
     CodexFieldAdvisor(ObjectMapper mapper, Duration timeout, String codexPath, String reasoningEffort) {
+        this(mapper, timeout, codexPath, reasoningEffort, "gpt-5.3-codex-spark");
+    }
+
+    CodexFieldAdvisor(ObjectMapper mapper, Duration timeout, String codexPath, String reasoningEffort, String model) {
         this.mapper = mapper;
         this.timeout = timeout;
         this.codexPath = codexPath;
         this.reasoningEffort = reasoningEffort;
+        this.model = model;
     }
 
     ObjectNode advise(JsonNode request) throws IOException, InterruptedException {
         ObjectNode sanitized = sanitize(request);
+        JsonNode result = runCodex(sanitized, ADVISOR_SYSTEM_INSTRUCTION, outputSchema());
+        validateResult(result, sanitized.path("fields"));
+        return success(result);
+    }
+
+    ObjectNode classify(JsonNode request) throws IOException, InterruptedException {
+        ObjectNode sanitized = sanitizeClassification(request);
+        JsonNode result = runCodex(sanitized, CLASSIFIER_SYSTEM_INSTRUCTION, classificationSchema());
+        validateClassification(result, sanitized.path("fields"));
+        return success(result);
+    }
+
+    private JsonNode runCodex(ObjectNode sanitized, String instruction, String schemaJson)
+            throws IOException, InterruptedException {
         Path schema = Files.createTempFile("yuqi-codex-fields-", ".schema.json");
         Path output = Files.createTempFile("yuqi-codex-fields-", ".output.json");
         try {
-            Files.writeString(schema, outputSchema(), StandardCharsets.UTF_8);
-            ProcessBuilder builder = new ProcessBuilder(codexPath, "exec", "--ephemeral", "--sandbox", "read-only",
+            Files.writeString(schema, schemaJson, StandardCharsets.UTF_8);
+            ProcessBuilder builder = new ProcessBuilder(codexPath, "exec", "--ephemeral", "--ignore-user-config",
+                    "--ignore-rules", "--sandbox", "read-only", "--model", model,
                     "-c", "model_reasoning_effort=\"" + reasoningEffort + "\"",
                     "--skip-git-repo-check", "--output-schema", schema.toString(), "--output-last-message",
                     output.toString(), "-");
             builder.redirectError(ProcessBuilder.Redirect.INHERIT);
             Process process = builder.start();
             try (var stdin = process.getOutputStream()) {
-                stdin.write((SYSTEM_INSTRUCTION + "\nINPUT:\n" + mapper.writeValueAsString(sanitized))
+                stdin.write((instruction + "\nINPUT:\n" + mapper.writeValueAsString(sanitized))
                         .getBytes(StandardCharsets.UTF_8));
             }
             boolean completed = process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!completed) {
                 process.destroyForcibly();
-                throw new IOException("Local Codex advisor timed out");
+                throw new IOException("Local Codex request timed out");
             }
-            if (process.exitValue() != 0) throw new IOException("Local Codex advisor exited with code " + process.exitValue());
-            JsonNode result = mapper.readTree(Files.readString(output));
-            validateResult(result, sanitized.path("fields"));
-            ObjectNode response = mapper.createObjectNode();
-            response.put("ok", true);
-            response.put("provider", "local-codex");
-            response.set("result", result);
-            return response;
+            if (process.exitValue() != 0) throw new IOException("Local Codex exited with code " + process.exitValue());
+            return mapper.readTree(Files.readString(output));
         } finally {
             Files.deleteIfExists(schema);
             Files.deleteIfExists(output);
         }
+    }
+
+    private ObjectNode success(JsonNode result) {
+        ObjectNode response = mapper.createObjectNode();
+        response.put("ok", true);
+        response.put("provider", "local-codex");
+        response.set("result", result);
+        return response;
     }
 
     ObjectNode sanitize(JsonNode request) {
@@ -109,6 +145,30 @@ final class CodexFieldAdvisor {
         return root;
     }
 
+    ObjectNode sanitizeClassification(JsonNode request) {
+        ObjectNode root = mapper.createObjectNode();
+        root.put("requestId", truncate(request.path("requestId").asText(), 100));
+        ObjectNode page = root.putObject("page");
+        page.put("origin", truncate(request.path("page").path("origin").asText(), 300));
+        page.put("title", truncate(request.path("page").path("title").asText(), 300));
+        page.put("pageType", truncate(request.path("page").path("pageType").asText(), 40));
+        copyFields(request.path("fields"), root.putArray("fields"));
+        return root;
+    }
+
+    private void copyFields(JsonNode source, ArrayNode fields) {
+        int count = 0;
+        for (JsonNode field : source) {
+            if (count++ >= MAX_FIELDS) break;
+            ObjectNode target = fields.addObject();
+            target.put("id", truncate(field.path("id").asText(), 180));
+            target.put("label", truncate(field.path("label").asText(), 500));
+            target.put("type", truncate(field.path("type").asText(), 60));
+            target.put("required", field.path("required").asBoolean(false));
+            copyStringArray(field.path("options"), target.putArray("options"), 100, 300);
+        }
+    }
+
     private void validateResult(JsonNode result, JsonNode requestedFields) throws IOException {
         if (!result.isObject() || !result.path("fields").isArray()) throw new IOException("Codex returned an invalid payload");
         List<String> allowedIds = new ArrayList<>();
@@ -117,6 +177,22 @@ final class CodexFieldAdvisor {
             if (!allowedIds.contains(field.path("fieldId").asText())) throw new IOException("Codex returned an unknown field id");
             if (!List.of("SUGGESTION", "UNRESOLVED").contains(field.path("status").asText())) {
                 throw new IOException("Codex returned an unsupported field status");
+            }
+        }
+    }
+
+    private void validateClassification(JsonNode result, JsonNode requestedFields) throws IOException {
+        if (!result.isObject() || !result.path("fields").isArray()) {
+            throw new IOException("Codex returned an invalid classification payload");
+        }
+        List<String> allowedIds = new ArrayList<>();
+        requestedFields.forEach(field -> allowedIds.add(field.path("id").asText()));
+        for (JsonNode field : result.path("fields")) {
+            if (!allowedIds.contains(field.path("fieldId").asText())) {
+                throw new IOException("Codex returned an unknown classification field id");
+            }
+            if (!List.of("CLASSIFIED", "UNRESOLVED").contains(field.path("status").asText())) {
+                throw new IOException("Codex returned an unsupported classification status");
             }
         }
     }
@@ -158,6 +234,12 @@ final class CodexFieldAdvisor {
     private static String outputSchema() {
         return """
                 {"type":"object","additionalProperties":false,"required":["fields"],"properties":{"fields":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["fieldId","value","status","confidence","reason"],"properties":{"fieldId":{"type":"string"},"value":{"type":["string","boolean","null"]},"status":{"type":"string","enum":["SUGGESTION","UNRESOLVED"]},"confidence":{"type":"number","minimum":0,"maximum":1},"reason":{"type":"string"}}}}}}
+                """;
+    }
+
+    private static String classificationSchema() {
+        return """
+                {"type":"object","additionalProperties":false,"required":["fields"],"properties":{"fields":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["fieldId","semanticKey","category","status","confidence","reason"],"properties":{"fieldId":{"type":"string"},"semanticKey":{"type":"string"},"category":{"type":"string","enum":["CONTACT","EXPERIENCE","EDUCATION","IMMIGRATION","EEO","COMPENSATION","CONSENT","LEGAL","OTHER"]},"status":{"type":"string","enum":["CLASSIFIED","UNRESOLVED"]},"confidence":{"type":"number","minimum":0,"maximum":1},"reason":{"type":"string"}}}}}}
                 """;
     }
 }
