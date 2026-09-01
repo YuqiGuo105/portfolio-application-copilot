@@ -72,9 +72,15 @@ public class SupabaseStorageClient {
     }
 
     private URI absolute(String value) {
+        return resolveSignedUrl(properties.baseUrl(), value);
+    }
+
+    static URI resolveSignedUrl(String baseUrl, String value) {
         if (value.startsWith("http://") || value.startsWith("https://")) return URI.create(value);
-        String path = value.startsWith("/") ? value : "/storage/v1/" + value;
-        return UriComponentsBuilder.fromUriString(properties.baseUrl()).path(path).build(true).toUri();
+        String origin = baseUrl.replaceAll("/+$", "");
+        String path = value.startsWith("/") ? value : "/" + value;
+        if (!path.startsWith("/storage/v1/")) path = "/storage/v1" + path;
+        return URI.create(origin + path);
     }
 
     private void ensureConfigured() {
