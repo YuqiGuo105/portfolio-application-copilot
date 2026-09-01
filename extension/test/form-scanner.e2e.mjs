@@ -72,14 +72,28 @@ assert.deepEqual(Array.from(ripplingScan.fields, (field) => field.semanticKey), 
 ]);
 assert.equal(ripplingScan.fields.filter((field) => field.required).length, 5);
 const ripplingApplied = rippling.window.__yuqiApplicationCopilot.apply({
-  'first-name': 'Yuqi',
-  'last-name': 'Guo',
+  firstName: 'Yuqi',
+  lastName: 'Guo',
   email: 'fixture@example.test',
-  company: 'Goldman Sachs',
+  currentCompany: 'Goldman Sachs',
   phone: '+1 (385) 237-4754'
 });
 assert.equal(ripplingApplied, 5);
 assert.equal(rippling.window.document.querySelector('#phone').value, '3852374754');
+
+const scannedFirstName = ripplingScan.fields.find((field) => field.semanticKey === 'first_name');
+const firstNameInput = rippling.window.document.querySelector('#first-name');
+firstNameInput.removeAttribute('name');
+firstNameInput.id = 'rerendered-generated-id';
+firstNameInput.value = '';
+const rebound = rippling.window.__yuqiApplicationCopilot.apply([{
+  id: scannedFirstName.id,
+  semanticKey: scannedFirstName.semanticKey,
+  label: scannedFirstName.label,
+  value: 'Yuqi'
+}]);
+assert.equal(rebound, 1, 'Semantic matching must survive an ATS rerender that changes the field id.');
+assert.equal(firstNameInput.value, 'Yuqi');
 
 console.log(JSON.stringify({ adapter: scan.adapter, fields: scan.fields.length, files: scan.files.length,
   action: scan.action.kind, applied, submitCount, submittedOutcome: submittedScan.outcome.kind,

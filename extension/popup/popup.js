@@ -200,7 +200,11 @@ async function scanActivePage() {
 
 async function applyToActivePage(values) {
   const tab = await activeTab();
-  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [values],
+  const instructions = Object.entries(values).map(([id, value]) => {
+    const field = currentPage?.fields?.find((item) => item.id === id) || {};
+    return { id, value, label: field.label || '', semanticKey: field.semanticKey || '' };
+  });
+  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [instructions],
     func: (approved) => globalThis.__yuqiApplicationCopilot?.apply(approved) || 0 });
   return result || 0;
 }

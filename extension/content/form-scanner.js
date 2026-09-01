@@ -19,11 +19,15 @@ globalThis.__yuqiApplicationCopilot = {
   },
   apply(values) {
     const controls = formControls();
+    const instructions = Array.isArray(values) ? values : Object.entries(values)
+      .map(([id, value]) => ({ id, value }));
+    const used = new Set();
     let applied = 0;
-    controls.forEach((element, index) => {
-      const id = stableId(element, index);
-      if (!Object.prototype.hasOwnProperty.call(values, id)) return;
-      const value = values[id];
+    instructions.forEach((instruction) => {
+      const match = findControl(controls, instruction, used);
+      if (!match) return;
+      const { element } = match;
+      const value = instruction.value;
       if (element.type === 'checkbox') {
         setChecked(element, value === true || ['true', 'yes', '1'].includes(String(value).toLowerCase()));
       } else if (element.type === 'radio') {
@@ -36,6 +40,7 @@ globalThis.__yuqiApplicationCopilot = {
         if (!option) return;
         setValue(element, option.value);
       } else setValue(element, valueForElement(element, value));
+      used.add(element);
       applied += 1;
     });
     return applied;
@@ -65,6 +70,20 @@ globalThis.__yuqiApplicationCopilot = {
 };
 
 function formControls() { return [...document.querySelectorAll('input, select, textarea')]; }
+function findControl(controls, instruction, used) {
+  const indexed = controls.map((element, index) => ({ element, index })).filter(({ element }) => !used.has(element));
+  const exact = indexed.find(({ element, index }) => stableId(element, index) === instruction.id);
+  if (exact) return exact;
+  if (instruction.semanticKey) {
+    const semantic = indexed.filter(({ element }) => semanticKeyFor(element) === instruction.semanticKey);
+    if (semantic.length === 1) return semantic[0];
+    const label = normalizeText(instruction.label);
+    const labelled = semantic.find(({ element }) => normalizeText(labelFor(element)) === label);
+    if (labelled) return labelled;
+  }
+  const label = normalizeText(instruction.label);
+  return label ? indexed.find(({ element }) => normalizeText(labelFor(element)) === label) : null;
+}
 function describeField(element, index) {
   const id = stableId(element, index);
   const label = labelFor(element);
@@ -156,7 +175,7 @@ function classifyPage(controls) {
   return 'FORM';
 }
 function stableId(element, index) {
-  const identity = element.id || element.name;
+  const identity = element.name || element.getAttribute('data-automation-id') || element.id;
   if (identity) return element.type === 'radio' ? `${identity}:${element.value || index}` : identity;
   return `field-${index}`;
 }
