@@ -8,11 +8,11 @@ public record ResolveFieldsRequest(
         @NotBlank @Size(max = 100) String applicationId,
         @NotEmpty @Size(max = 80) List<@Valid Field> fields) {
     public record Field(
-            @NotBlank @Size(max = 180) String id,
-            @NotBlank @Size(max = 500) String label,
-            @Size(max = 160) String semanticKey,
-            @Size(max = 60) String type,
-            @Size(max = 100) List<@Size(max = 300) String> options) {
+            @NotBlank @Size(max = 512) String id,
+            @NotBlank @Size(max = 4000) String label,
+            @Size(max = 256) String semanticKey,
+            @Size(max = 128) String type,
+            @Size(max = 200) List<@Size(max = 2000) String> options) {
         public Field(String id, String label, String type, List<String> options) {
             this(id, label, null, type, options);
         }
