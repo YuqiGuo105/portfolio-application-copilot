@@ -8,47 +8,56 @@ export async function loadSettings() {
   return { endpoint: stored.mcpEndpoint, session, accessToken: session?.accessToken || '' };
 }
 
-export async function callTool(name, args) {
+export async function callTool(name, args, { timeoutMs = 30000 } = {}) {
   const { endpoint, accessToken } = await loadSettings();
   if (!accessToken) {
     throw new AdminSessionError('Sign in to yuqi.site once, then reopen the extension. Future sessions reconnect automatically.');
   }
 
-  let response = await requestTool(endpoint, accessToken, name, args);
-  if (response.status === 401) {
-    await clearAdminSession();
-    const refreshed = await restoreAdminSession();
-    if (refreshed?.accessToken && refreshed.accessToken !== accessToken) {
-      response = await requestTool(endpoint, refreshed.accessToken, name, args);
-    }
-  }
-
-  const text = await response.text();
-  if (!response.ok) {
-    const reason = readHttpError(text);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    let response = await requestTool(endpoint, accessToken, name, args, controller.signal);
     if (response.status === 401) {
       await clearAdminSession();
-      throw new AdminSessionError(
-        'Your admin session expired or was rejected. Sign in again; automatic connection resumes afterward.',
-        'SESSION_EXPIRED'
-      );
+      const refreshed = await restoreAdminSession();
+      if (refreshed?.accessToken && refreshed.accessToken !== accessToken) {
+        response = await requestTool(endpoint, refreshed.accessToken, name, args, controller.signal);
+      }
     }
-    if (response.status === 403) {
-      throw new AdminSessionError(
-        reason || 'This signed-in account does not have permission to use admin MCP tools.',
-        'ACCESS_DENIED'
-      );
+
+    const text = await response.text();
+    if (!response.ok) {
+      const reason = readHttpError(text);
+      if (response.status === 401) {
+        await clearAdminSession();
+        throw new AdminSessionError(
+          'Your admin session expired or was rejected. Sign in again; automatic connection resumes afterward.',
+          'SESSION_EXPIRED'
+        );
+      }
+      if (response.status === 403) {
+        throw new AdminSessionError(
+          reason || 'This signed-in account does not have permission to use admin MCP tools.',
+          'ACCESS_DENIED'
+        );
+      }
+      throw new Error(reason ? `MCP request failed (${response.status}): ${reason}`
+        : `MCP request failed (${response.status}).`);
     }
-    throw new Error(reason ? `MCP request failed (${response.status}): ${reason}`
-      : `MCP request failed (${response.status}).`);
+    const payload = parseMcpResponse(text);
+    if (payload.error) throw new Error(payload.error.message || 'MCP tool failed.');
+    if (payload.result?.isError) throw new Error(readToolText(payload.result) || 'MCP tool failed.');
+    return payload.result?.structuredContent || parseToolText(payload.result) || {};
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('MCP request timed out. Check the connection and retry.');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  const payload = parseMcpResponse(text);
-  if (payload.error) throw new Error(payload.error.message || 'MCP tool failed.');
-  if (payload.result?.isError) throw new Error(readToolText(payload.result) || 'MCP tool failed.');
-  return payload.result?.structuredContent || parseToolText(payload.result) || {};
 }
 
-function requestTool(endpoint, accessToken, name, args) {
+function requestTool(endpoint, accessToken, name, args, signal) {
   return fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -57,6 +66,7 @@ function requestTool(endpoint, accessToken, name, args) {
       'Content-Type': 'application/json',
       'MCP-Protocol-Version': '2025-03-26'
     },
+    signal,
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: crypto.randomUUID(),

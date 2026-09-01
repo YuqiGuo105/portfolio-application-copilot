@@ -286,8 +286,18 @@ async function loadActiveResumeAsset() {
 
 async function downloadManagedResume() {
   setStatus('Fetching the active resume through a short-lived private download ticket...');
-  const ticket = await callTool('career.get_active_resume_download', { _confirmed: true });
-  const response = await fetch(ticket.downloadUrl, { cache: 'no-store', credentials: 'omit' });
+  const ticket = await callTool('career.get_active_resume_download', { _confirmed: true }, { timeoutMs: 20000 });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  let response;
+  try {
+    response = await fetch(ticket.downloadUrl, { cache: 'no-store', credentials: 'omit', signal: controller.signal });
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('Managed resume download timed out. Retry or choose the local PDF override.');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) throw new Error(`Managed resume download failed (${response.status}).`);
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength !== Number(ticket.sizeBytes)) throw new Error('Managed resume size verification failed.');
