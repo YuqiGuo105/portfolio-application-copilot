@@ -49,4 +49,39 @@ class ApplicationFieldResolverTest {
         assertThat(result.value()).isEqualTo("No");
         assertThat(result.source()).isEqualTo("encrypted application memory");
     }
+
+    @Test void resolvesCanonicalAtsSemanticsFromPrivateMemoryAliases() {
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(), List.of(), Map.of(
+                        "given name", "Yuqi",
+                        "surname", "Guo",
+                        "phone number", "+1 555 0100",
+                        "linkedin link", "https://www.linkedin.com/in/example/"),
+                new CandidateProfile.Source("mcp", List.of("get_profile"), "fresh"));
+
+        List<FieldResolution> result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-4", List.of(
+                        new ResolveFieldsRequest.Field("first", "Candidate legal first name", "first_name", "text", List.of()),
+                        new ResolveFieldsRequest.Field("last", "Candidate legal last name", "last_name", "text", List.of()),
+                        new ResolveFieldsRequest.Field("phone", "Telephone", "phone", "tel", List.of()),
+                        new ResolveFieldsRequest.Field("linkedin", "Profile URL", "linkedin_url", "url", List.of()))));
+
+        assertThat(result).extracting(FieldResolution::value)
+                .containsExactly("Yuqi", "Guo", "+1 555 0100", "https://www.linkedin.com/in/example/");
+        assertThat(result).allMatch(field -> field.status() == FieldResolution.ResolutionStatus.RESOLVED);
+    }
+
+    @Test void resolvesCurrentCompanyFromPublicExperienceWhenPrivateMemoryIsEmpty() {
+        CandidateProfile profile = new CandidateProfile("v1", Instant.now(), "Backend engineer", List.of(),
+                List.of(Map.of("title", "Goldman Sachs")), List.of(), Map.of(),
+                new CandidateProfile.Source("mcp", List.of("get_profile"), "fresh"));
+
+        FieldResolution result = new ApplicationFieldResolver(() -> profile).resolve(
+                new ResolveFieldsRequest("app-5", List.of(
+                        new ResolveFieldsRequest.Field("company", "Current employer", "current_company", "text", List.of()))))
+                .get(0);
+
+        assertThat(result.status()).isEqualTo(FieldResolution.ResolutionStatus.RESOLVED);
+        assertThat(result.value()).isEqualTo("Goldman Sachs");
+    }
 }

@@ -25,13 +25,12 @@ button, input { font: inherit; }
   width: 40px;
   height: 40px;
   place-items: center;
-  border: 1px solid #0e7e72;
   border-radius: 8px;
-  color: #fff;
-  background: #0d756b;
-  font-size: 13px;
-  font-weight: 850;
+  overflow: hidden;
+  background: #050607;
+  box-shadow: 0 0 0 1px rgb(23 35 44 / 16%);
 }
+.brand-mark img { width: 100%; height: 100%; object-fit: cover; }
 .brand-copy { min-width: 0; }
 .eyebrow { color: #0e7e72; font-size: 9px; font-weight: 850; letter-spacing: 1.2px; }
 h1 { margin-top: 2px; font-size: 17px; letter-spacing: 0; }
@@ -72,7 +71,8 @@ main { padding: 14px; }
 .hero-label { color: #0e7e72; font-size: 9px; font-weight: 850; letter-spacing: 1px; }
 .hero-panel h2 { margin-top: 4px; font-size: 18px; line-height: 1.25; }
 .hero-panel > div:first-child > p:last-child { margin-top: 6px; color: #6b777f; font-size: 12px; line-height: 1.45; }
-.toolbar { display: grid; grid-template-columns: 1fr 1.35fr; gap: 8px; margin-top: 14px; }
+.toolbar { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 14px; }
+.toolbar:has(#sign-in:not([hidden])) { grid-template-columns: .72fr 1.28fr; }
 button {
   min-height: 40px;
   border: 1px solid #0e7e72;
@@ -84,9 +84,11 @@ button {
   cursor: pointer;
 }
 button:hover { background: #0b6e64; }
+button:focus-visible { outline: 3px solid rgb(14 126 114 / 22%); outline-offset: 2px; }
 button.secondary { color: #0b6e64; background: #fff; }
 button.secondary:hover { background: #eef8f6; }
 button:disabled { cursor: not-allowed; opacity: .45; }
+.toolbar button { min-width: 0; padding-inline: 12px; font-size: 11px; }
 #status {
   min-height: 19px;
   margin-top: 10px;
@@ -119,11 +121,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   font-size: 11px;
   font-weight: 850;
 }
+.company-mark img { width: 28px; height: 28px; object-fit: contain; }
 .page-copy { min-width: 0; }
 .page-context .label { display: block; color: #7a878e; font-size: 8px; font-weight: 850; letter-spacing: .8px; }
 .page-context strong { display: block; margin-top: 2px; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .page-context small { display: block; margin-top: 3px; overflow: hidden; color: #708087; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.review-badge,
 .section-tag {
   border: 1px solid #d2dcde;
   border-radius: 999px;
@@ -133,6 +135,21 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   font-size: 9px;
   font-weight: 800;
 }
+.readiness-score {
+  position: relative;
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  align-content: center;
+  flex: 0 0 auto;
+}
+.readiness-score svg { position: absolute; inset: 0; width: 58px; height: 58px; transform: rotate(-90deg); }
+.readiness-score circle { fill: none; stroke-width: 4; }
+.readiness-track { stroke: #e0e7e8; }
+.readiness-ring { stroke: #17a68f; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset .3s ease; }
+.readiness-score strong { position: relative; font-size: 13px; line-height: 1; }
+.readiness-score span { position: relative; margin-top: 3px; color: #758289; font-size: 7px; font-weight: 850; letter-spacing: .5px; text-transform: uppercase; }
 
 .review-summary { margin-top: 12px; overflow: hidden; }
 .summary-heading { padding: 13px 14px 11px; }

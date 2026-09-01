@@ -1,6 +1,7 @@
-import { connectAdminSession } from '../shared/admin-session.js';
+import { AdminSessionError, connectAdminSession, openAdminLogin, restoreAdminSession } from '../shared/admin-session.js';
+import { calculateApplicationProgress } from '../shared/application-progress.js';
 import { resolveWithLocalCodex } from '../shared/codex-client.js';
-import { callTool, loadSettings } from '../shared/mcp-client.js';
+import { callTool } from '../shared/mcp-client.js';
 
 const status = document.querySelector('#status');
 const results = document.querySelector('#results');
@@ -18,14 +19,19 @@ let currentPage = null;
 let activeCredential = null;
 let applicationId = null;
 let activeResumeAsset = null;
+const signInButton = document.querySelector('#sign-in');
+const scanButton = document.querySelector('#scan');
+let operationRunning = false;
+let connectionChecking = false;
 
-document.querySelector('#connect').addEventListener('click', async () => {
-  const connected = await run('Connected to the authenticated MCP cluster.', connectAdminSession);
-  if (connected) setConnectionState(true);
+signInButton.addEventListener('click', async () => {
+  await run('Finish signing in on yuqi.site, then reopen this panel. Connection is automatic.', openAdminLogin);
 });
 
-document.querySelector('#scan').addEventListener('click', async () => {
+scanButton.addEventListener('click', async () => {
   await run(null, async () => {
+    const session = await connectAdminSession({ interactive: true, allowBackgroundSync: true });
+    setConnectionState(true, session.email);
     setWorkflow('scan');
     currentPage = await scanActivePage();
     if (currentPage.outcome?.kind === 'SUBMITTED') {
@@ -149,18 +155,30 @@ applyButton.addEventListener('click', async () => {
   });
 });
 
-loadSettings().then(({ accessToken }) => {
-  setConnectionState(Boolean(accessToken));
-  setStatus(accessToken ? 'Admin session connected. Scan an application page to begin.'
-    : 'Connect your admin session before resolving private profile fields.');
-});
+initializeSession();
+
+async function initializeSession() {
+  setConnectionState('checking');
+  try {
+    const session = await restoreAdminSession();
+    setConnectionState(Boolean(session), session?.email);
+    setStatus(session
+      ? `Ready${session.email ? ` as ${session.email}` : ''}. Open an application and start auto-fill.`
+      : 'Sign in once to enable private resume-backed auto-fill.');
+  } catch (error) {
+    setConnectionState(false);
+    setStatus(error.message || 'Unable to restore the saved session.', true);
+  }
+}
 
 async function scanActivePage() {
   const tab = await activeTab();
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/form-scanner.js'] });
   const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id },
     func: () => globalThis.__yuqiApplicationCopilot.scan() });
-  return result || { pageType: 'FORM', origin: '', fields: [], files: [], action: { kind: 'NONE' } };
+  const page = result || { pageType: 'FORM', origin: '', fields: [], files: [], action: { kind: 'NONE' } };
+  page.faviconUrl = chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(tab.url)}&size=64`);
+  return page;
 }
 
 async function applyToActivePage(values) {
@@ -265,7 +283,7 @@ function renderResolutions(items) {
     group.append(heading, ...groupItems.map((item) => renderResolution(item, state)));
     return group;
   }));
-  renderSummary(groups, items.length);
+  renderSummary(groups, items);
   refreshApplyState();
 }
 
@@ -305,16 +323,26 @@ function groupResolutions(items) {
   ].filter((group) => group.items.length);
 }
 
-function renderSummary(groups, total) {
+function renderSummary(groups, items) {
   const counts = Object.fromEntries(groups.map((group) => [group.state, group.items.length]));
   const ready = counts.ready || 0;
   const review = counts.review || 0;
   const manual = counts.manual || 0;
-  const actionable = ready + review;
-  const percent = total ? Math.round((actionable / total) * 100) : 0;
-  document.querySelector('#progress-label').textContent = `${actionable} / ${total} fields have a value`;
+  const progress = calculateApplicationProgress({
+    fields: currentPage?.fields,
+    files: currentPage?.files,
+    resolutions: items,
+    hasResume: Boolean(activeResumeAsset || resumeFile.files?.length)
+  });
+  const { prepared, total, percent } = progress;
+  document.querySelector('#progress-label').textContent = progress.required
+    ? `${prepared} / ${total} required fields ready`
+    : `${prepared} / ${total} detected fields ready`;
   document.querySelector('#progress-percent').textContent = `${percent}%`;
   document.querySelector('#progress-fill').style.width = `${percent}%`;
+  document.querySelector('#readiness-percent').textContent = `${percent}%`;
+  document.querySelector('#readiness-ring').style.strokeDashoffset = String(100 - percent);
+  document.querySelector('#readiness-score').setAttribute('aria-label', `Application readiness ${percent} percent`);
   document.querySelector('#ready-count').textContent = String(ready);
   document.querySelector('#review-count').textContent = String(review);
   document.querySelector('#manual-count').textContent = String(manual);
@@ -325,7 +353,16 @@ function renderPageContext(page) {
   document.querySelector('#page-type').textContent = `${page.adapter} · ${page.pageType.replaceAll('_', ' ')}`;
   document.querySelector('#page-origin').textContent = page.origin;
   const hostname = safeHostname(page.origin);
-  document.querySelector('.company-mark').textContent = hostname.slice(0, 2).toUpperCase() || 'AP';
+  const companyIcon = document.querySelector('#company-icon');
+  const companyInitials = document.querySelector('#company-initials');
+  companyInitials.textContent = hostname.slice(0, 2).toUpperCase() || 'AP';
+  companyIcon.hidden = !page.faviconUrl;
+  companyInitials.hidden = Boolean(page.faviconUrl);
+  companyIcon.onerror = () => {
+    companyIcon.hidden = true;
+    companyInitials.hidden = false;
+  };
+  if (page.faviconUrl) companyIcon.src = page.faviconUrl;
   accountRoot.hidden = !['SIGN_UP', 'SIGN_IN'].includes(page.pageType);
   document.querySelector('#prepare-account').hidden = page.pageType !== 'SIGN_UP';
   resumeUpload.hidden = !page.files.length;
@@ -351,7 +388,10 @@ function refreshApplyState() {
   applyButton.disabled = !document.querySelector('[data-field-id]:checked') && !resumeFile.files?.length && !managedResumeAvailable;
 }
 
-resumeFile.addEventListener('change', refreshApplyState);
+resumeFile.addEventListener('change', () => {
+  refreshApplyState();
+  if (resolutions.length) renderSummary(groupResolutions(resolutions), resolutions);
+});
 
 function setWorkflow(active) {
   const order = ['scan', 'resolve', 'review', 'fill', 'ready'];
@@ -382,19 +422,35 @@ function safeHostname(origin) {
 
 async function run(successMessage, operation) {
   setStatus('Working...');
+  operationRunning = true;
+  updateActionAvailability();
   try {
     await operation();
     if (successMessage) setStatus(successMessage);
     return true;
   } catch (error) {
+    if (error instanceof AdminSessionError) setConnectionState(false);
     setStatus(error.message || 'Operation failed.', true);
     return false;
+  } finally {
+    operationRunning = false;
+    updateActionAvailability();
   }
 }
 
-function setConnectionState(connected) {
-  connectionState.dataset.connected = String(connected);
-  connectionState.textContent = connected ? 'Connected' : 'Offline';
+function setConnectionState(connected, email = '') {
+  const checking = connected === 'checking';
+  const ready = connected === true;
+  connectionChecking = checking;
+  connectionState.dataset.connected = String(ready);
+  connectionState.textContent = checking ? 'Connecting...' : ready ? 'Connected' : 'Sign in required';
+  connectionState.title = ready && email ? `Connected as ${email}` : '';
+  signInButton.hidden = ready || checking;
+  updateActionAvailability();
+}
+
+function updateActionAvailability() {
+  scanButton.disabled = operationRunning || connectionChecking;
 }
 
 function setStatus(message, error = false) {

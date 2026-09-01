@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/form-scanner.e2e.mjs"
+    "test": "node test/auth-token.test.mjs && node test/admin-session.test.mjs && node test/application-progress.test.mjs && node test/mcp-auth.test.mjs && node test/form-scanner.e2e.mjs"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"

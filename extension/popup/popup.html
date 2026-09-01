@@ -8,7 +8,9 @@
   </head>
   <body>
     <header class="app-header">
-      <div class="brand-mark" aria-hidden="true">YQ</div>
+      <div class="brand-mark" aria-hidden="true">
+        <img src="../icons/yuqi-48.png" alt="">
+      </div>
       <div class="brand-copy">
         <p class="eyebrow">YUQI.SITE</p>
         <h1>Application Copilot</h1>
@@ -22,21 +24,31 @@
           <h2>Review before anything is filled</h2>
           <p>Resume-backed answers, policy checks, and a manual final submit.</p>
         </div>
-        <div class="toolbar">
-          <button id="connect" class="secondary">Connect</button>
-          <button id="scan">Scan page</button>
+        <div class="toolbar" aria-label="Admin connection and page actions">
+          <button id="sign-in" class="secondary" hidden>Sign in</button>
+          <button id="scan">Auto-fill Application</button>
         </div>
-        <p id="status" role="status">Not connected</p>
+        <p id="status" role="status" aria-live="polite">Restoring your saved session...</p>
       </section>
 
       <section id="page-context" class="page-context" hidden>
-        <div class="company-mark" aria-hidden="true">AP</div>
+        <div class="company-mark" aria-hidden="true">
+          <img id="company-icon" alt="" hidden>
+          <span id="company-initials">AP</span>
+        </div>
         <div class="page-copy">
           <span class="label">CURRENT WORKFLOW</span>
           <strong id="page-type">Application</strong>
           <small id="page-origin"></small>
         </div>
-        <span class="review-badge">Review</span>
+        <div id="readiness-score" class="readiness-score" aria-label="Application readiness 0 percent">
+          <svg viewBox="0 0 54 54" aria-hidden="true">
+            <circle class="readiness-track" cx="27" cy="27" r="22" pathLength="100"></circle>
+            <circle id="readiness-ring" class="readiness-ring" cx="27" cy="27" r="22" pathLength="100"></circle>
+          </svg>
+          <strong id="readiness-percent">0%</strong>
+          <span>ready</span>
+        </div>
       </section>
 
       <section id="review-summary" class="review-summary" hidden>

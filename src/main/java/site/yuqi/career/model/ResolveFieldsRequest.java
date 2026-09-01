@@ -4,5 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import java.util.List;
 public record ResolveFieldsRequest(@NotBlank String applicationId, @NotEmpty List<@Valid Field> fields) {
-    public record Field(@NotBlank String id, @NotBlank String label, String type, List<String> options) {}
+    public record Field(@NotBlank String id, @NotBlank String label, String semanticKey, String type, List<String> options) {
+        public Field(String id, String label, String type, List<String> options) {
+            this(id, label, null, type, options);
+        }
+    }
 }

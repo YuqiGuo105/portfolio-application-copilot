@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import site.yuqi.career.model.FieldResolution;
 
 import java.util.Optional;
+import java.util.Map;
 
 @Component
 @Order(30)
@@ -20,7 +21,24 @@ public class PublicProfileFieldRule implements ApplicationFieldRule {
             return Optional.of(result(context, context.profile().summary(), .94,
                     "Current cached candidate summary."));
         }
+        if (label.equals("current company")) {
+            String company = firstString(context.profile().experience(), "company", "title", "name");
+            if (!company.isBlank()) {
+                return Optional.of(result(context, company, .96,
+                        "Current employer from the first-party experience record."));
+            }
+        }
         return Optional.empty();
+    }
+
+    private String firstString(Iterable<Map<String, Object>> items, String... keys) {
+        for (Map<String, Object> item : items) {
+            for (String key : keys) {
+                Object value = item.get(key);
+                if (value != null && !String.valueOf(value).isBlank()) return String.valueOf(value);
+            }
+        }
+        return "";
     }
 
     private FieldResolution result(FieldResolutionContext context, Object value, double confidence, String reason) {

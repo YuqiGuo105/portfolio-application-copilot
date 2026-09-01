@@ -29,7 +29,9 @@ public class ApplicationFieldResolver {
         CandidateProfile profile = profiles.get(); return request.fields().stream().map(field -> resolve(field, profile)).toList();
     }
     private FieldResolution resolve(ResolveFieldsRequest.Field field, CandidateProfile profile) {
-        String label = policy.normalize(field.label());
+        String sourceLabel = field.semanticKey() == null || field.semanticKey().isBlank()
+                ? field.label() : field.semanticKey();
+        String label = policy.normalize(sourceLabel);
         FieldResolutionContext context = new FieldResolutionContext(field, profile, label,
                 policy.requiresConfirmation(label));
         for (ApplicationFieldRule rule : rules) {
