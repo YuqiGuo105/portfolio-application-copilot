@@ -57,6 +57,13 @@ const rippling = new JSDOM(ripplingFixture, {
   runScripts: 'outside-only'
 });
 rippling.window.CSS = dom.window.CSS;
+rippling.window.fetch = globalThis.fetch;
+rippling.window.DataTransfer = class DataTransfer {
+  constructor() {
+    this.files = [];
+    this.items = { add: (file) => this.files.push(file) };
+  }
+};
 for (const element of rippling.window.document.querySelectorAll('*')) {
   element.getClientRects = () => [{ width: 100, height: 30 }];
 }
@@ -85,6 +92,14 @@ assert.equal(ripplingScan.pageType, 'APPLICATION');
 assert.equal(ripplingScan.fields.length, 10, 'Search and anonymous controls must not enter the application workflow.');
 assert.equal(ripplingScan.files.length, 2);
 assert.deepEqual(Array.from(ripplingScan.files, (field) => field.semanticKey), ['resume', 'cover_letter']);
+const hiddenResumeInput = rippling.window.document.querySelector('#resume');
+Object.defineProperty(hiddenResumeInput, 'files', { value: [], writable: true });
+const attachedResume = await rippling.window.__yuqiApplicationCopilot.applyFile('resume', {
+  name: 'Yuqi_Guo_Resume_SDE2.pdf', type: 'application/pdf',
+  dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y='
+});
+assert.equal(attachedResume.name, 'Yuqi_Guo_Resume_SDE2.pdf');
+assert.equal(hiddenResumeInput.files[0].name, 'Yuqi_Guo_Resume_SDE2.pdf');
 assert.deepEqual(Array.from(ripplingScan.fields, (field) => field.semanticKey), [
   'first_name', 'last_name', 'email', 'current_company', 'phone', 'linkedin_url', 'website_url', '', '', ''
 ]);
