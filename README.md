@@ -2,6 +2,8 @@
 
 Java 21 / Spring Boot domain service plus a Chrome Manifest V3 client for MCP-mediated job application assistance.
 
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/yuqi-application-copilot/kgebalpnomjfemfeeiaphpaomkkccebd)**
+
 ## Boundary
 
 ```text
