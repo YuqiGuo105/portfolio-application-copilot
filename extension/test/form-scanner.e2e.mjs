@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
+import { reviewedPageTarget } from '../shared/reviewed-page.js';
 
 const fixture = await readFile(new URL('./workable-fixture.html', import.meta.url), 'utf8');
 const ripplingFixture = await readFile(new URL('./rippling-fixture.html', import.meta.url), 'utf8');
@@ -39,7 +40,7 @@ const applied = await copilot.apply({
   lastname: 'Guo',
   email: 'fixture@example.test',
   motivation: 'Fixture-only distributed systems answer.'
-});
+}, scan.origin);
 assert.equal(applied, 4);
 assert.equal(dom.window.document.querySelector('#firstname').value, 'Yuqi');
 assert.equal(dom.window.document.querySelector('#lastname').value, 'Guo');
@@ -111,10 +112,10 @@ Object.defineProperty(hiddenResumeInput, 'files', { value: [], writable: true })
 const attachedResume = await rippling.window.__yuqiApplicationCopilot.applyFile('resume', {
   name: 'Yuqi_Guo_Resume_SDE2.pdf', type: 'application/pdf',
   dataUrl: 'data:application/pdf;base64,JVBERi0xLjQKJSVFT0Y='
-});
+}, ripplingScan.origin);
 assert.equal(attachedResume.name, 'Yuqi_Guo_Resume_SDE2.pdf');
 assert.equal(hiddenResumeInput.files[0].name, 'Yuqi_Guo_Resume_SDE2.pdf');
-assert.equal(rippling.window.__yuqiApplicationCopilot.fileStatus({ semanticKey: 'resume' }).name,
+assert.equal(rippling.window.__yuqiApplicationCopilot.fileStatus({ semanticKey: 'resume' }, ripplingScan.origin).name,
   'Yuqi_Guo_Resume_SDE2.pdf');
 assert.equal(rippling.window.__yuqiApplicationCopilot.scan().files[0].selectedName,
   'Yuqi_Guo_Resume_SDE2.pdf');
@@ -133,7 +134,7 @@ const ripplingApplied = await rippling.window.__yuqiApplicationCopilot.apply({
   email: 'fixture@example.test',
   currentCompany: 'Goldman Sachs',
   phone: '+1 (385) 237-4754'
-});
+}, ripplingScan.origin);
 assert.equal(ripplingApplied, 5);
 assert.equal(rippling.window.document.querySelector('#phone').value, '3852374754');
 
@@ -143,7 +144,7 @@ const choiceApplied = await rippling.window.__yuqiApplicationCopilot.apply([
   { id: 'hispanic', label: 'Are you Hispanic/Latino?', semanticKey: 'hispanic_latino', value: 'No' },
   { id: 'location', label: 'Location', value: 'Salt Lake City, UT' },
   { id: 'radio:smsConsent', label: 'Check Yes or No to indicate your agreement to receive text message updates from Rippling regarding your job application.', semanticKey: 'sms_consent', value: 'No' }
-]);
+], ripplingScan.origin);
 assert.equal(choiceApplied, 5);
 assert.equal(genderControl.dataset.selected, 'Male');
 assert.equal(raceControl.dataset.selected, 'Asian');
@@ -161,7 +162,7 @@ const rebound = await rippling.window.__yuqiApplicationCopilot.apply([{
   semanticKey: scannedFirstName.semanticKey,
   label: scannedFirstName.label,
   value: 'Yuqi'
-}]);
+}], ripplingScan.origin);
 assert.equal(rebound, 1, 'Semantic matching must survive an ATS rerender that changes the field id.');
 assert.equal(firstNameInput.value, 'Yuqi');
 
@@ -205,13 +206,37 @@ const upstartApplied = await upstart.window.__yuqiApplicationCopilot.apply([
   { id: 'veteran', label: 'Veteran Status', value: 'I am not a protected veteran' },
   { id: 'race', label: 'Race', value: 'Asian' },
   { id: 'gender', label: 'Gender', value: 'Male' }
-]);
+], upstartScan.origin);
 assert.equal(upstartApplied, 6);
 assert.equal(upstart.window.document.querySelector('input[value="Remote"]').checked, true);
 assert.equal(upstart.window.document.querySelector('input[value="Austin, TX"]').checked, false);
 assert.equal(upstart.window.document.querySelector('#disability').dataset.selected, "No, I don't have a disability");
 assert.equal(upstart.window.document.querySelector('#race').dataset.selected, 'Asian');
 assert.equal(upstart.window.document.querySelector('#gender').dataset.selected, 'Male');
+
+const reviewedPage = { tabId: 8, documentId: 'reviewed-document', origin: scan.origin };
+assert.deepEqual(reviewedPageTarget(reviewedPage, { id: 8, url: scan.url }),
+  { tabId: 8, documentIds: ['reviewed-document'] });
+assert.throws(() => reviewedPageTarget(reviewedPage, { id: 9, url: scan.url }), /changed/);
+assert.throws(() => reviewedPageTarget(reviewedPage, { id: 8, url: 'https://unreviewed.example/' }), /changed/);
+assert.throws(() => reviewedPageTarget({ ...reviewedPage, documentId: null }, { id: 8, url: scan.url }), /changed/);
+await assert.rejects(copilot.apply({ firstname: 'Never filled' }), /origin changed/);
+dom.reconfigure({ url: 'https://unreviewed.example/form' });
+await assert.rejects(copilot.apply({ firstname: 'Never filled' }, scan.origin), /origin changed/);
+assert.equal(dom.window.document.querySelector('#firstname').value, 'Yuqi');
+dom.window.document.body.insertAdjacentHTML('beforeend', '<input id="password" type="password">');
+assert.throws(() => copilot.applyCredentials({ username: 'private', password: 'private' }, scan.origin), /origin changed/);
+assert.equal(dom.window.document.querySelector('#password').value, '');
+
+hiddenResumeInput.files = [];
+rippling.window.fetch = async () => {
+  rippling.reconfigure({ url: 'https://unreviewed.example/upload' });
+  return { blob: async () => new rippling.window.Blob(['test'], { type: 'application/pdf' }) };
+};
+await assert.rejects(rippling.window.__yuqiApplicationCopilot.applyFile('resume', {
+  name: 'private.pdf', dataUrl: 'data:application/pdf;base64,dGVzdA=='
+}, ripplingScan.origin), /origin changed/);
+assert.equal(hiddenResumeInput.files.length, 0, 'Navigation during attachment loading must prevent a write.');
 
 console.log(JSON.stringify({ adapter: scan.adapter, fields: scan.fields.length, files: scan.files.length,
   action: scan.action.kind, applied, submitCount, submittedOutcome: submittedScan.outcome.kind,

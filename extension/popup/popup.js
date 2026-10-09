@@ -2,6 +2,7 @@ import { AdminSessionError, connectAdminSession, openAdminLogin, restoreAdminSes
 import { calculateApplicationProgress } from '../shared/application-progress.js';
 import { classifyWithLocalCodex } from '../shared/codex-client.js';
 import { callTool } from '../shared/mcp-client.js';
+import { reviewedPageTarget } from '../shared/reviewed-page.js';
 
 const status = document.querySelector('#status');
 const results = document.querySelector('#results');
@@ -227,42 +228,48 @@ async function initializeSession() {
 async function scanActivePage() {
   const tab = await activeTab();
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content/form-scanner.js'] });
-  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id },
+  const [{ result, documentId }] = await chrome.scripting.executeScript({ target: { tabId: tab.id },
     func: () => globalThis.__yuqiApplicationCopilot.scan() });
   const page = result || { pageType: 'FORM', origin: '', fields: [], files: [], action: { kind: 'NONE' } };
+  page.tabId = tab.id;
+  page.documentId = documentId;
   page.faviconUrl = chrome.runtime.getURL(`/_favicon/?pageUrl=${encodeURIComponent(tab.url)}&size=64`);
   return page;
 }
 
 async function applyToActivePage(values) {
   const tab = await activeTab();
+  const target = reviewedPageTarget(currentPage, tab);
   const instructions = Object.entries(values).map(([id, value]) => {
     const field = currentPage?.fields?.find((item) => item.id === id) || {};
     return { id, value, label: field.label || '', semanticKey: field.semanticKey || '' };
   });
-  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [instructions],
-    func: async (approved) => await globalThis.__yuqiApplicationCopilot?.apply(approved) || 0 });
+  const [{ result }] = await chrome.scripting.executeScript({ target, args: [instructions, currentPage.origin],
+    func: async (approved, origin) => await globalThis.__yuqiApplicationCopilot?.apply(approved, origin) || 0 });
   return result || 0;
 }
 
 async function applyResumeToActivePage(field, file) {
   if (file.size > 10 * 1024 * 1024) throw new Error('Resume files must be 10 MB or smaller.');
   const tab = await activeTab();
+  const page = currentPage;
+  reviewedPageTarget(page, tab);
   const payload = { name: file.name, type: file.type || 'application/pdf', dataUrl: await readAsDataUrl(file) };
   const reference = { id: field.id, label: field.label || '', semanticKey: field.semanticKey || 'resume' };
   let result = null;
   for (const delay of [0, 400, 900, 1800]) {
     if (delay) await wait(delay);
-    const [{ result: statusResult }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [reference],
-      func: (value) => globalThis.__yuqiApplicationCopilot?.fileStatus(value) });
+    const target = reviewedPageTarget(page, await activeTab());
+    const [{ result: statusResult }] = await chrome.scripting.executeScript({ target, args: [reference, page.origin],
+      func: (value, origin) => globalThis.__yuqiApplicationCopilot?.fileStatus(value, origin) });
     if (statusResult?.name === file.name) { result = statusResult; continue; }
-    const [{ result: applyResult }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [reference, payload],
-      func: async (value, attachment) => globalThis.__yuqiApplicationCopilot?.applyFile(value, attachment) });
+    const [{ result: applyResult }] = await chrome.scripting.executeScript({ target, args: [reference, payload, page.origin],
+      func: async (value, attachment, origin) => globalThis.__yuqiApplicationCopilot?.applyFile(value, attachment, origin) });
     result = applyResult;
   }
   await wait(400);
-  const [{ result: verified }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [reference],
-    func: (value) => globalThis.__yuqiApplicationCopilot?.fileStatus(value) });
+  const [{ result: verified }] = await chrome.scripting.executeScript({ target: reviewedPageTarget(page, await activeTab()), args: [reference, page.origin],
+    func: (value, origin) => globalThis.__yuqiApplicationCopilot?.fileStatus(value, origin) });
   if (verified?.name !== file.name) throw new Error('The ATS cleared the resume after rendering. Try attaching it again.');
   return verified || result;
 }
@@ -333,9 +340,9 @@ async function sha256Hex(bytes) {
 
 async function applyCredentials(credential) {
   const tab = await activeTab();
-  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id },
-    args: [{ username: credential.username, password: credential.password }],
-    func: (value) => globalThis.__yuqiApplicationCopilot?.applyCredentials(value) || { applied: [] } });
+  const [{ result }] = await chrome.scripting.executeScript({ target: reviewedPageTarget(currentPage, tab),
+    args: [{ username: credential.username, password: credential.password }, currentPage.origin],
+    func: (value, origin) => globalThis.__yuqiApplicationCopilot?.applyCredentials(value, origin) || { applied: [] } });
   if (!result?.applied?.length) throw new Error('No visible username or password fields were found.');
   return result;
 }

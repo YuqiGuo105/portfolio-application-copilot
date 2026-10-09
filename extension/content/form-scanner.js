@@ -15,19 +15,21 @@ globalThis.__yuqiApplicationCopilot = {
       pageType: classifyPage(controls), origin: location.origin, url: location.href, title: document.title,
       fields, files, action: detectPrimaryAction(), outcome: detectSubmissionOutcome() };
   },
-  async apply(values) {
+  async apply(values, expectedOrigin) {
+    assertReviewedOrigin(expectedOrigin);
     const controls = formControls();
     const instructions = Array.isArray(values) ? values : Object.entries(values)
       .map(([id, value]) => ({ id, value }));
     const used = new Set();
     let applied = 0;
     for (const instruction of instructions) {
+      assertReviewedOrigin(expectedOrigin);
       const match = findControl(controls, instruction, used);
       if (!match) continue;
       const { element } = match;
       const value = instruction.value;
       if (isCustomCombobox(element)) {
-        if (!await chooseCustomOption(element, value)) continue;
+        if (!await chooseCustomOption(element, value, expectedOrigin)) continue;
       } else if (element.type === 'checkbox') {
         if (isGroupedCheckbox(element)) {
           if (!applyCheckboxGroup(element, value)) continue;
@@ -48,12 +50,15 @@ globalThis.__yuqiApplicationCopilot = {
     }
     return applied;
   },
-  async applyFile(fieldReference, payload) {
+  async applyFile(fieldReference, payload, expectedOrigin) {
+    assertReviewedOrigin(expectedOrigin);
     const controls = formControls();
     const input = findAttachmentInput(controls, fieldReference);
     if (!input || input.type !== 'file') throw new Error('The resume upload field is no longer available.');
     if (!payload?.dataUrl || !payload?.name) throw new Error('The selected resume is invalid.');
     const blob = await fetch(payload.dataUrl).then((response) => response.blob());
+    assertReviewedOrigin(expectedOrigin);
+    if (!input.isConnected) throw new Error('The resume upload field changed. Scan the page again.');
     const file = new File([blob], payload.name, { type: payload.type || blob.type || 'application/pdf' });
     const transfer = new DataTransfer();
     transfer.items.add(file);
@@ -61,22 +66,34 @@ globalThis.__yuqiApplicationCopilot = {
     dispatch(input);
     return { fieldId: stableId(input, controls.indexOf(input)), name: input.files?.[0]?.name || '', size: file.size };
   },
-  fileStatus(fieldReference) {
+  fileStatus(fieldReference, expectedOrigin) {
+    assertReviewedOrigin(expectedOrigin);
     const controls = formControls();
     const input = findAttachmentInput(controls, fieldReference);
     return input ? { found: true, fieldId: stableId(input, controls.indexOf(input)),
       name: input.files?.[0]?.name || '', size: input.files?.[0]?.size || 0 } : { found: false, name: '', size: 0 };
   },
-  applyCredentials(credential) {
+  applyCredentials(credential, expectedOrigin) {
+    assertReviewedOrigin(expectedOrigin);
     const controls = [...document.querySelectorAll('input')].filter(isVisible);
     const passwordInputs = controls.filter((element) => element.type === 'password');
     const usernameInput = controls.find((element) => isUsernameField(element));
     const applied = [];
     if (usernameInput) { setValue(usernameInput, credential.username); applied.push(labelFor(usernameInput) || 'Username'); }
-    passwordInputs.forEach((element) => { setValue(element, credential.password); applied.push(labelFor(element) || 'Password'); });
+    passwordInputs.forEach((element) => {
+      assertReviewedOrigin(expectedOrigin);
+      setValue(element, credential.password);
+      applied.push(labelFor(element) || 'Password');
+    });
     return { applied, passwordFields: passwordInputs.length };
   }
 };
+
+function assertReviewedOrigin(expectedOrigin) {
+  if (!expectedOrigin || !/^https?:\/\//.test(expectedOrigin) || location.origin !== expectedOrigin) {
+    throw new Error('The application origin changed. Scan and review the page again.');
+  }
+}
 
 function formControls() {
   const scope = applicationScope();
@@ -346,11 +363,14 @@ function linkedOptions(element) {
   const ids = `${element.getAttribute('aria-controls') || ''} ${element.getAttribute('aria-owns') || ''}`.trim().split(/\s+/).filter(Boolean);
   return ids.flatMap((id) => optionElements(document.getElementById(id)));
 }
-async function chooseCustomOption(element, value) {
+async function chooseCustomOption(element, value, expectedOrigin) {
+  assertReviewedOrigin(expectedOrigin);
   element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
   element.click();
+  assertReviewedOrigin(expectedOrigin);
   if (element.tagName === 'INPUT') setValue(element, value);
   const options = await waitForOptions(element);
+  assertReviewedOrigin(expectedOrigin);
   const option = findMatchingOption(options, value);
   if (!option) return false;
   option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));

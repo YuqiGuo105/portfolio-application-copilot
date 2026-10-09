@@ -87,7 +87,7 @@ SCANNED -> RESOLVED -> REVIEWED -> READY_TO_SUBMIT -> SUBMITTED -> CONFIRMED
 
 - **Aggregate + State Machine:** one application attempt owns valid transitions and count invariants; stages cannot be skipped.
 - **Policy + Chain of Responsibility:** sensitive policy is deterministic and evaluated before profile fallback; new field strategies are independently testable.
-- **Repository + Optimistic Lock:** PostgreSQL is authoritative and `@Version` rejects stale concurrent mutations.
+- **Repository + Optimistic Lock:** PostgreSQL is authoritative for application workflow and private-vault records; `@Version` rejects stale concurrent mutations. Per-origin ATS credentials are a separate Valkey-only store and are not covered by this durability guarantee.
 - **Command/Query separation:** MCP mutations are explicit workflow commands; timeline retrieval is a read-only query.
 - **Transactional Audit Log:** each state mutation and event append share one database transaction.
 - **Idempotency:** the gateway deduplicates writes, while the aggregate tolerates repeated delivery of an already-recorded stage.
@@ -122,6 +122,10 @@ The generated Native Messaging manifest is written to the current macOS user's C
 4. The service canonicalizes the HTTPS origin and generates a unique 24-character password.
 5. The credential is AES-GCM encrypted and stored under a SHA-256 origin key in Valkey.
 6. The extension fills username, password, and password confirmation fields without persisting plaintext locally.
+
+Before filling fields, credentials, or a resume, the extension rechecks the reviewed tab and HTTPS/HTTP origin and targets the scanned Chrome document ID. Navigation requires another scan. The content script checks the origin again before writes, including after asynchronous file loading and option lookup. This prevents a different page from inheriting an earlier review; submission remains manual.
+
+ATS credentials currently depend on Valkey persistence. Cache eviction or loss can remove them; this is not a durable password manager. Use the ATS password-reset workflow to recover access. Key-versioned encryption and a replacement credential-storage policy remain separate work.
 7. On a later SIGN_IN, another explicit owner action retrieves and fills the credential for that origin.
 8. The user completes CAPTCHA, MFA, terms, and submit actions.
 ```

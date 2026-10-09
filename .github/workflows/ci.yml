@@ -20,6 +20,16 @@ jobs:
           cache: maven
       - name: Verify Java service
         run: ./mvnw --batch-mode verify
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - name: Extension regression tests
+        working-directory: extension
+        run: |
+          npm ci
+          npm test
       - name: Validate extension manifest and scripts
         run: |
           python3 -m json.tool extension/manifest.json >/dev/null
